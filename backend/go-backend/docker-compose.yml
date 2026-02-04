@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: resume-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-resume_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - resume-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Database Migration Service
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    container_name: resume-migrate
+    environment:
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-resume_db}
+      DB_SSLMODE: disable
+      DB_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - resume-network
+    command: ["./migrate", "-command=up"]
+    restart: "no"
+
+  # Go Backend API
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: resume-backend
+  #   environment:
+  #     # Server
+  #     PORT: ${PORT:-8080}
+  #     UPLOAD_DIR: /app/uploads
+      
+  #     # Database
+  #     DB_HOST: postgres
+  #     DB_PORT: ${DB_PORT:-5432}
+  #     DB_USER: ${DB_USER:-postgres}
+  #     DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  #     DB_NAME: ${DB_NAME:-resume_db}
+  #     DB_SSLMODE: disable
+  #     DB_ENABLED: "true"
+      
+  #     # Cloudinary (optional)
+  #     CLOUDINARY_ENABLED: ${CLOUDINARY_ENABLED:-false}
+  #     CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+  #     CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+  #     CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+  #     CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-resume-ocr}
+      
+  #     # Auth
+  #     JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+  #     JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+  #     REFRESH_EXPIRY_DAYS: ${REFRESH_EXPIRY_DAYS:-30}
+  #     AUTH_REDIRECT_URL: ${AUTH_REDIRECT_URL:-http://localhost:3000/auth/callback}
+      
+  #     # OAuth Providers
+  #     GOOGLE_ENABLED: ${GOOGLE_ENABLED:-false}
+  #     GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  #     GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      
+  #     GITHUB_ENABLED: ${GITHUB_ENABLED:-false}
+  #     GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  #     GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      
+  #     MICROSOFT_ENABLED: ${MICROSOFT_ENABLED:-false}
+  #     MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+  #     MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+  #   ports:
+  #     - "${PORT:-8080}:8080"
+  #   volumes:
+  #     - uploads_data:/app/uploads
+  #   depends_on:
+  #     migrate:
+  #       condition: service_completed_successfully
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - resume-network
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+networks:
+  resume-network:
+    driver: bridge
