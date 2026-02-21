@@ -38,3 +38,13 @@ export const ATS_STATUS_LABEL = {
   [ATS_STATUS.REJECTED]: 'Rejected',
   [ATS_STATUS.HIRED]: 'Hired',
 }
+
+/** Badge variant per status for candidate/HR UI (default | secondary | outline | destructive) */
+export const ATS_STATUS_BADGE_VARIANT = {
+  [ATS_STATUS.APPLIED]: 'secondary',
+  [ATS_STATUS.SCREENING]: 'default',
+  [ATS_STATUS.SHORTLISTED]: 'default',
+  [ATS_STATUS.INTERVIEW]: 'default',
+  [ATS_STATUS.REJECTED]: 'destructive',
+  [ATS_STATUS.HIRED]: 'default',
+}

@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 
 const LoginPage = lazy(() => import('@/app/auth/LoginPage').then((m) => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('@/app/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })))
+const HrRegisterPage = lazy(() => import('@/app/auth/HrRegisterPage').then((m) => ({ default: m.HrRegisterPage })))
 const HrDashboardPage = lazy(() => import('@/app/hr/HrDashboardPage').then((m) => ({ default: m.HrDashboardPage })))
 const HrJobsPage = lazy(() => import('@/app/hr/HrJobsPage').then((m) => ({ default: m.HrJobsPage })))
 const HrJobApplicantsPage = lazy(() => import('@/app/hr/HrJobApplicantsPage').then((m) => ({ default: m.HrJobApplicantsPage })))
@@ -42,6 +43,11 @@ const router = createBrowserRouter([
         path: 'register',
         element: <AuthLayout />,
         children: [{ index: true, element: <LazyRoute Component={RegisterPage} /> }],
+      },
+      {
+        path: 'register/hr',
+        element: <AuthLayout />,
+        children: [{ index: true, element: <LazyRoute Component={HrRegisterPage} /> }],
       },
       {
         path: 'hr',

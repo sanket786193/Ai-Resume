@@ -1,0 +1,125 @@
+package client
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+)
+
+// Client calls the Python AI service (Ollama/ADK) over HTTP.
+type Client struct {
+	baseURL    string
+	httpClient *http.Client
+	enabled    bool
+}
+
+// ScreenRequest is sent to the AI service.
+type ScreenRequest struct {
+	ResumePathOrContent string `json:"resume_path_or_content"`
+	JobDescription     string `json:"job_description"`
+}
+
+// ScreenResponse is returned by the AI service (full ATS evaluation).
+type ScreenResponse struct {
+	SkillMatchScore   float64   `json:"skill_match_score"`
+	RankingScore      float64   `json:"ranking_score"`
+	Qualified         bool      `json:"qualified"`
+	ATSScore          *int      `json:"ats_score,omitempty"`
+	SkillMatchPct     *int      `json:"skill_match_pct,omitempty"`
+	MissingSkills     []string  `json:"missing_skills,omitempty"`
+	ExperienceMatch   *string   `json:"experience_match,omitempty"`
+	Summary           *string   `json:"summary,omitempty"`
+	ModelVersion      *string   `json:"model_version,omitempty"`
+}
+
+// New creates an AI client.
+func New(baseURL string, timeoutSec int, enabled bool) *Client {
+	if timeoutSec <= 0 {
+		timeoutSec = 60
+	}
+	return &Client{
+		baseURL: baseURL,
+		httpClient: &http.Client{
+			Timeout: time.Duration(timeoutSec) * time.Second,
+		},
+		enabled: enabled,
+	}
+}
+
+// ParseRequest is sent to POST /parse.
+type ParseRequest struct {
+	ResumePathOrContent string `json:"resume_path_or_content"`
+}
+
+// ParseResponse is returned by the AI service parse endpoint.
+type ParseResponse struct {
+	RawText    string          `json:"raw_text"`
+	Parsed     json.RawMessage `json:"parsed"`
+	CleanedText string         `json:"cleaned_text"`
+}
+
+// Parse calls the Python service to parse resume (URL or raw text); returns raw_text, parsed_json, cleaned_text.
+func (c *Client) Parse(ctx context.Context, resumePathOrContent string) (*ParseResponse, error) {
+	if !c.enabled {
+		return &ParseResponse{}, nil
+	}
+	reqBody := ParseRequest{ResumePathOrContent: resumePathOrContent}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/parse", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ai parse returned %d", resp.StatusCode)
+	}
+	var out ParseResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ScreenResume calls the Python service for resume screening; implements ats.AIClient.
+func (c *Client) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string) (*ScreenResponse, error) {
+	if !c.enabled {
+		return &ScreenResponse{}, nil
+	}
+	reqBody := ScreenRequest{
+		ResumePathOrContent: resumeContentOrPath,
+		JobDescription:     jobDescription,
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/screen", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ai service returned %d", resp.StatusCode)
+	}
+	var out ScreenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

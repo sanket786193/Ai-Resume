@@ -14,7 +14,7 @@ import (
 func main() {
 	var (
 		command = flag.String("command", "up", "Migration command: up, down, status, or create")
-		dir     = flag.String("dir", "migrations", "Directory with migration files")
+		dir     = flag.String("dir", "./migrations", "Directory with migration files")
 	)
 	flag.Parse()
 
@@ -31,7 +31,7 @@ func main() {
 	// Set migration directory
 	migrationDir := *dir
 	if migrationDir == "" {
-		migrationDir = "migrations"
+		migrationDir = "./migrations"
 	}
 
 	// Execute migration command

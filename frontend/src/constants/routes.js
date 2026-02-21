@@ -6,6 +6,7 @@ export const ROUTES = {
   // Auth
   LOGIN: '/login',
   REGISTER: '/register',
+  REGISTER_HR: '/register/hr',
   // HR
   HR_DASHBOARD: '/hr',
   HR_JOBS: '/hr/jobs',

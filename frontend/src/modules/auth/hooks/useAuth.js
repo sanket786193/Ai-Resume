@@ -33,25 +33,38 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      const t = data?.token ?? data?.accessToken
+      const t = data?.access_token ?? data?.accessToken ?? data?.token
       if (t) setStoredToken(t)
       queryClient.setQueryData(AUTH_QUERY_KEY, data?.user ?? data)
     },
   })
 
   const registerMutation = useMutation({
-    mutationFn: authApi.register,
+    mutationFn: authApi.registerCandidate,
     onSuccess: (data) => {
-      const t = data?.token ?? data?.accessToken
+      const t = data?.access_token ?? data?.accessToken ?? data?.token
       if (t) setStoredToken(t)
       queryClient.setQueryData(AUTH_QUERY_KEY, data?.user ?? data)
     },
   })
 
-  const logout = () => {
-    setStoredToken(null)
-    queryClient.setQueryData(AUTH_QUERY_KEY, null)
-    queryClient.removeQueries({ queryKey: AUTH_QUERY_KEY })
+  const registerHRMutation = useMutation({
+    mutationFn: authApi.registerHR,
+    onSuccess: (data) => {
+      const t = data?.access_token ?? data?.accessToken ?? data?.token
+      if (t) setStoredToken(t)
+      queryClient.setQueryData(AUTH_QUERY_KEY, data?.user ?? data)
+    },
+  })
+
+  const logout = async () => {
+    try {
+      await authApi.logout()
+    } finally {
+      setStoredToken(null)
+      queryClient.setQueryData(AUTH_QUERY_KEY, null)
+      queryClient.removeQueries({ queryKey: AUTH_QUERY_KEY })
+    }
   }
 
   return {
@@ -63,6 +76,8 @@ export function useAuth() {
     loginMutation,
     register: registerMutation.mutateAsync,
     registerMutation,
+    registerHR: registerHRMutation.mutateAsync,
+    registerHRMutation,
     logout,
     isAuthenticated: !!user,
   }

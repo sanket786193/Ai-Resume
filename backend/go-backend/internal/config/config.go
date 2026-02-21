@@ -5,22 +5,26 @@ import (
 	"os"
 )
 
-// Config holds application configuration
+// Config holds application configuration.
 type Config struct {
 	Port      string
 	UploadDir string
 
-	// Database configuration
-	Database DatabaseConfig
-
-	// Cloudinary configuration
-	Cloudinary CloudinaryConfig
-
-	// Auth configuration
-	Auth AuthConfig
+	Database         DatabaseConfig
+	Auth             AuthConfig
+	AI               AIConfig
+	SupabaseStorage  SupabaseStorageConfig
 }
 
-// DatabaseConfig holds database connection parameters
+// SupabaseStorageConfig for resume/file uploads via Supabase Storage.
+type SupabaseStorageConfig struct {
+	Enabled        bool
+	URL            string // e.g. https://xxx.supabase.co
+	ServiceRoleKey string
+	Bucket         string // e.g. resumes
+}
+
+// DatabaseConfig holds database connection parameters.
 type DatabaseConfig struct {
 	Host     string
 	Port     string
@@ -31,34 +35,23 @@ type DatabaseConfig struct {
 	Enabled  bool
 }
 
-// CloudinaryConfig holds Cloudinary credentials
-type CloudinaryConfig struct {
-	CloudName string
-	APIKey    string
-	APISecret string
-	Folder    string
-	Enabled   bool
-}
-
-// AuthConfig holds authentication configuration
+// AuthConfig holds JWT and refresh token configuration.
 type AuthConfig struct {
 	JWTSecret         string
 	JWTExpiryHours    int
 	RefreshExpiryDays int
-	RedirectURL       string
-	Google            OAuthProvider
-	GitHub            OAuthProvider
-	Microsoft         OAuthProvider
 }
 
-// OAuthProvider holds OAuth provider configuration
-type OAuthProvider struct {
-	ClientID     string
-	ClientSecret string
-	Enabled      bool
+// AIConfig for Python AI service (Ollama/ADK); supports HTTP or gRPC.
+type AIConfig struct {
+	BaseURL    string
+	Enabled    bool
+	TimeoutSec int
+	UseGRPC    bool   // if true, use gRPC instead of HTTP
+	GRPCTarget string // e.g. localhost:50051
 }
 
-// LoadConfig loads configuration from environment variables
+// LoadConfig loads configuration from environment variables.
 func LoadConfig() *Config {
 	return &Config{
 		Port:      getEnv("PORT", "8080"),
@@ -67,48 +60,38 @@ func LoadConfig() *Config {
 			Host:     getEnv("DB_HOST", "localhost"),
 			Port:     getEnv("DB_PORT", "5432"),
 			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", ""),
+			Password: getEnv("DB_PASSWORD", "postgres"),
 			DBName:   getEnv("DB_NAME", "resume_db"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 			Enabled:  getEnv("DB_ENABLED", "true") == "true",
-		},
-		Cloudinary: CloudinaryConfig{
-			CloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
-			APIKey:    getEnv("CLOUDINARY_API_KEY", ""),
-			APISecret: getEnv("CLOUDINARY_API_SECRET", ""),
-			Folder:    getEnv("CLOUDINARY_FOLDER", "resume-ocr"),
-			Enabled:   getEnv("CLOUDINARY_ENABLED", "true") == "true",
 		},
 		Auth: AuthConfig{
 			JWTSecret:         getEnv("JWT_SECRET", "change-me-in-production"),
 			JWTExpiryHours:    getEnvInt("JWT_EXPIRY_HOURS", 24),
 			RefreshExpiryDays: getEnvInt("REFRESH_EXPIRY_DAYS", 30),
-			RedirectURL:       getEnv("AUTH_REDIRECT_URL", "http://localhost:3000/auth/callback"),
-			Google: OAuthProvider{
-				ClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
-				ClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-				Enabled:      getEnv("GOOGLE_ENABLED", "false") == "true",
-			},
-			GitHub: OAuthProvider{
-				ClientID:     getEnv("GITHUB_CLIENT_ID", ""),
-				ClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
-				Enabled:      getEnv("GITHUB_ENABLED", "false") == "true",
-			},
-			Microsoft: OAuthProvider{
-				ClientID:     getEnv("MICROSOFT_CLIENT_ID", ""),
-				ClientSecret: getEnv("MICROSOFT_CLIENT_SECRET", ""),
-				Enabled:      getEnv("MICROSOFT_ENABLED", "false") == "true",
-			},
+		},
+		AI: AIConfig{
+			BaseURL:    getEnv("AI_SERVICE_URL", "http://localhost:8000"),
+			Enabled:    getEnv("AI_ENABLED", "true") == "true",
+			TimeoutSec: getEnvInt("AI_TIMEOUT_SEC", 60),
+			UseGRPC:    getEnv("AI_USE_GRPC", "false") == "true",
+			GRPCTarget: getEnv("AI_GRPC_TARGET", "localhost:50051"),
+		},
+		SupabaseStorage: SupabaseStorageConfig{
+			Enabled:        getEnv("SUPABASE_STORAGE_ENABLED", "false") == "true",
+			URL:            getEnv("SUPABASE_URL", ""),
+			ServiceRoleKey: getEnv("SUPABASE_SERVICE_ROLE_KEY", ""),
+			Bucket:         getEnv("SUPABASE_STORAGE_BUCKET", "resumes"),
 		},
 	}
 }
 
-// GetDSN returns the database connection string for goose
+// GetDSN returns the database connection string for Goose.
 func (c *DatabaseConfig) GetDSN() string {
 	return "postgres://" + c.User + ":" + c.Password + "@" + c.Host + ":" + c.Port + "/" + c.DBName + "?sslmode=" + c.SSLMode
 }
 
-// GetPostgresDSN returns the database connection string for lib/pq
+// GetPostgresDSN returns the database connection string for lib/pq.
 func (c *DatabaseConfig) GetPostgresDSN() string {
 	return "host=" + c.Host +
 		" port=" + c.Port +
@@ -118,7 +101,6 @@ func (c *DatabaseConfig) GetPostgresDSN() string {
 		" sslmode=" + c.SSLMode
 }
 
-// getEnv gets an environment variable or returns a default value
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -126,7 +108,6 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// getEnvInt gets an environment variable as int or returns a default value
 func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		var result int

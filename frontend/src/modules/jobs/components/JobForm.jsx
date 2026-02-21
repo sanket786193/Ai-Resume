@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
 import { validateRequired } from '@/utils/validation'
 
 /**
@@ -18,13 +19,15 @@ export function JobForm({ open, onOpenChange, job, onSave, isSaving }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [department, setDepartment] = useState('')
+  const [location, setLocation] = useState('')
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (open) {
-      setTitle(job?.title ?? '')
-      setDescription(job?.description ?? '')
-      setDepartment(job?.department ?? '')
+      setTitle(job?.title ?? job?.Title ?? '')
+      setDescription(job?.description ?? job?.Description ?? '')
+      setDepartment(job?.department ?? job?.Department ?? '')
+      setLocation(job?.location ?? job?.Location ?? '')
       setErrors({})
     }
   }, [open, job])
@@ -34,9 +37,11 @@ export function JobForm({ open, onOpenChange, job, onSave, isSaving }) {
     const next = {}
     const titleErr = validateRequired(title.trim(), 'Title')
     if (titleErr) next.title = titleErr
+    const descErr = validateRequired(description.trim(), 'Description')
+    if (descErr) next.description = descErr
     setErrors(next)
     if (Object.keys(next).length > 0) return
-    onSave({ title: title.trim(), description, department })
+    onSave({ title: title.trim(), description: description.trim(), department: department.trim() || undefined, location: location.trim() || undefined })
   }
 
   return (
@@ -44,7 +49,7 @@ export function JobForm({ open, onOpenChange, job, onSave, isSaving }) {
       <DialogContent>
         <form onSubmit={handleSubmit} noValidate>
           <DialogHeader>
-            <DialogTitle>{job?.id ? 'Edit job' : 'Create job'}</DialogTitle>
+            <DialogTitle>{(job?.id ?? job?.ID) ? 'Edit job' : 'Create job'}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -69,14 +74,26 @@ export function JobForm({ open, onOpenChange, job, onSave, isSaving }) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <textarea
-                id="description"
-                className="flex min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Job description"
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Remote, New York"
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <MarkdownEditor
+                id="description"
+                value={description}
+                onChange={(v) => { setDescription(v); setErrors((p) => ({ ...p, description: null })) }}
+                placeholder="Job description (supports **bold**, _italic_, lists, links…)"
+                minHeight={180}
+                aria-invalid={!!errors.description}
+                aria-describedby={errors.description ? 'description-error' : undefined}
+              />
+              {errors.description && <p id="description-error" className="text-sm text-destructive" role="alert">{errors.description}</p>}
             </div>
           </div>
           <DialogFooter>

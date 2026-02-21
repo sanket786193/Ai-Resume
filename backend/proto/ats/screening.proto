@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package ats.v1;
+
+option go_package = "resume/internal/pb/ats;ats";
+
+// AIScreeningService is implemented by the Python AI service; Go calls it for resume screening.
+service AIScreeningService {
+  rpc Screen(ScreenRequest) returns (ScreenResponse);
+}
+
+message ScreenRequest {
+  string resume_path_or_content = 1;
+  string job_description = 2;
+}
+
+message ScreenResponse {
+  double skill_match_score = 1;
+  double ranking_score = 2;
+  bool qualified = 3;
+}
