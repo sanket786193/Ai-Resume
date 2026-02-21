@@ -77,7 +77,7 @@ func (h *Handler) ListMyApplications(c *gin.Context) {
 	response.JSON(c, http.StatusOK, list)
 }
 
-// ListByJob returns ATS records for a job (HR).
+// ListByJob returns enriched applications for a job (HR): candidate name, email, job title.
 func (h *Handler) ListByJob(c *gin.Context) {
 	jobID := c.Param("id") // from route /jobs/:id/applications
 	statusStr := c.Query("status")
@@ -90,12 +90,26 @@ func (h *Handler) ListByJob(c *gin.Context) {
 	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	list, err := h.svc.ListByJob(c.Request.Context(), jobID, status, limit, offset)
+	list, err := h.svc.ListByJobEnriched(c.Request.Context(), jobID, status, limit, offset)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
+	if list == nil {
+		list = []*ApplicationForHR{}
+	}
 	response.JSON(c, http.StatusOK, list)
+}
+
+// GetApplicationByID returns one application with full detail for HR (candidate contact, AI feedback, resume).
+func (h *Handler) GetApplicationByID(c *gin.Context) {
+	id := c.Param("id")
+	detail, err := h.svc.GetApplicationByIDEnriched(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.JSON(c, http.StatusOK, detail)
 }
 
 // ListForHR returns ATS records for all of HR's jobs (or one job if job_id query is set).
@@ -119,10 +133,13 @@ func (h *Handler) ListForHR(c *gin.Context) {
 	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	list, err := h.svc.ListForHR(c.Request.Context(), claims.UserID, jobID, status, limit, offset)
+	list, err := h.svc.ListForHREnriched(c.Request.Context(), claims.UserID, jobID, status, limit, offset)
 	if err != nil {
 		response.Error(c, err)
 		return
+	}
+	if list == nil {
+		list = []*ApplicationForHR{}
 	}
 	response.JSON(c, http.StatusOK, list)
 }

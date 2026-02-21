@@ -24,6 +24,9 @@ class ScreeningResult:
     skill_match_pct: Optional[int] = None
     missing_skills: Optional[List[str]] = None
     experience_match: Optional[str] = None
+    experience_warnings: Optional[List[str]] = None
+    keyword_matches: Optional[List[str]] = None
+    semantic_matches: Optional[List[str]] = None
     summary: Optional[str] = None
     model_version: Optional[str] = None
 
@@ -74,7 +77,7 @@ class ScreeningService:
             if self.ollama.is_available():
                 return self._screen_with_ollama(resume_text, job_text, vector_similarity)
         except OllamaUnavailableError:
-            logger.warning("Ollama unavailable, using fallback scoring")
+            logger.warning("Ollama unavailable (timeout or unreachable), using fallback heuristic scoring")
 
         # 3) Heuristic
         return self._fallback_heuristic(resume_text, job_text)
@@ -87,7 +90,10 @@ class ScreeningService:
         system = (
             "You are an ATS assistant. Evaluate the candidate resume against the job description. "
             "Reply with ONLY a single JSON object, no markdown or extra text. Keys: ats_score (0-100), "
-            "skill_match_pct (0-100), missing_skills (array of strings), experience_match (short string, e.g. Good/Fair), "
+            "skill_match_pct (0-100), missing_skills (array of required job skills/terms not found or weak in resume), "
+            "experience_match (short string, e.g. Good/Fair/Low), experience_warnings (array of strings: specific experience mismatches, e.g. 'Years in X below requirement'), "
+            "keyword_matches (array of job skills/terms that appear verbatim or near-verbatim in the resume), "
+            "semantic_matches (array of job skills/requirements that are satisfied by resume meaning even if different words used), "
             "summary (2-3 sentences), qualified (boolean)."
         )
         prompt = (
@@ -112,6 +118,18 @@ class ScreeningService:
                 missing = []
             missing = [str(x) for x in missing][:20]
             exp = str(data.get("experience_match", "")) or None
+            exp_warnings = data.get("experience_warnings")
+            if not isinstance(exp_warnings, list):
+                exp_warnings = []
+            exp_warnings = [str(x) for x in exp_warnings][:15]
+            keyword_m = data.get("keyword_matches")
+            if not isinstance(keyword_m, list):
+                keyword_m = []
+            keyword_m = [str(x) for x in keyword_m][:30]
+            semantic_m = data.get("semantic_matches")
+            if not isinstance(semantic_m, list):
+                semantic_m = []
+            semantic_m = [str(x) for x in semantic_m][:30]
             summary = str(data.get("summary", "")) or None
             return ScreeningResult(
                 skill_match_score=max(0.0, min(1.0, ats / 100.0)),
@@ -121,6 +139,9 @@ class ScreeningService:
                 skill_match_pct=max(0, min(100, skill_pct)),
                 missing_skills=missing or None,
                 experience_match=exp,
+                experience_warnings=exp_warnings or None,
+                keyword_matches=keyword_m or None,
+                semantic_matches=semantic_m or None,
                 summary=summary,
                 model_version=model_version,
             )
@@ -150,12 +171,14 @@ class ScreeningService:
         job_clean = extract_text_from_content(job_text)
         resume_skills = set(s.lower() for s in extract_skills_stub(resume_clean))
         job_words = set(re.findall(r"[a-zA-Z]{3,}", job_clean.lower()))
+        keyword_matches_list = sorted(resume_skills & job_words)[:30]
         overlap = len(resume_skills & job_words) / max(len(job_words), 1)
         score = min(1.0, overlap * 2.0)
         return ScreeningResult(
             skill_match_score=score,
             ranking_score=score * 0.9,
             qualified=score >= 0.3,
+            keyword_matches=keyword_matches_list if keyword_matches_list else None,
         )
 
     def _fallback_result(self) -> ScreeningResult:

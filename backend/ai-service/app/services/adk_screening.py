@@ -1,4 +1,7 @@
-"""Run Google ADK screening pipeline and map result to Go contract."""
+"""Run Google ADK screening pipeline and map result to Go contract.
+
+ADK (google.adk) is optional. If not installed, screening falls back to Ollama/heuristic.
+"""
 from typing import Any, Dict, Optional
 
 from app.core.logging import get_logger
@@ -13,6 +16,13 @@ def run_adk_pipeline(resume_text: str, jd_text: str) -> Optional[Dict[str, Any]]
     """
     try:
         from app.agents.pipeline_agent import screening_pipeline
+    except ModuleNotFoundError as e:
+        # google.adk / ADK not installed – expected when using Ollama-only setup
+        logger.debug("ADK pipeline not available (missing module): %s", e)
+        return None
+    except ImportError as e:
+        logger.debug("ADK pipeline import failed: %s", e)
+        return None
     except Exception as e:
         logger.warning("ADK pipeline import failed: %s", e)
         return None

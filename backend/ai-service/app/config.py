@@ -27,7 +27,7 @@ class Settings:
     ollama_model: str = "llama3:8b"
     ollama_embed_model: str = "nomic-embed-text"
     ollama_embed_dim: int = 768
-    ollama_timeout_sec: int = 120
+    ollama_timeout_sec: int = 50  # keep under Go client timeout (~60s) so fallback returns in sync; override with OLLAMA_TIMEOUT_SEC for slow models
 
     # Logging
     log_level: str = "INFO"

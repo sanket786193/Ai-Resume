@@ -76,6 +76,7 @@ func NewRouter(cfg Config) *gin.Engine {
 		hr.POST("/jobs/:id/close", cfg.JobsHandler.Close)
 		hr.DELETE("/jobs/:id", cfg.JobsHandler.Delete)
 		hr.GET("/applications", cfg.ATSHandler.ListForHR)         // all HR's applications (optional ?job_id=)
+		hr.GET("/applications/:id", cfg.ATSHandler.GetApplicationByID) // single application detail
 		hr.GET("/jobs/:id/applications", cfg.ATSHandler.ListByJob) // id = job_id
 		hr.PUT("/applications/:id/status", cfg.ATSHandler.UpdateStatus)
 		hr.GET("/interviews", cfg.InterviewsHandler.List)

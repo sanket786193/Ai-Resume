@@ -38,6 +38,7 @@ export const candidatesApi = {
     const q = params ? `?${new URLSearchParams(params)}` : ''
     return http.get(`/api/hr/applications${q}`)
   },
+  getById: (id) => http.get(`/api/hr/applications/${id}`),
   getByJob: (jobId) => http.get(`/api/hr/jobs/${jobId}/applications`),
   updateStatus: (id, status) => http.put(`/api/hr/applications/${id}/status`, { status }),
 }

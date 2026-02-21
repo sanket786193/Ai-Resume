@@ -35,7 +35,7 @@ func (r *ATSRepo) Create(ctx context.Context, a *entities.ATSRecord) error {
 
 // atsSelectCols is the full column list for ats_records (including AI feedback).
 const atsSelectCols = `id, job_id, candidate_id, resume_id, status, skill_match_score, ranking_score, qualified, ai_processed_at,
-	ats_score, skill_match_pct, missing_skills, experience_match, ai_summary, model_version, created_at, updated_at`
+	ats_score, skill_match_pct, missing_skills, experience_match, experience_warnings, keyword_matches, semantic_matches, ai_summary, model_version, created_at, updated_at`
 
 // GetByID returns an ATS record by ID.
 func (r *ATSRepo) GetByID(ctx context.Context, id string) (*entities.ATSRecord, error) {
@@ -74,16 +74,26 @@ func (r *ATSRepo) UpdateAIScores(ctx context.Context, id string, skillMatch, ran
 	return err
 }
 
-// UpdateAIFeedback updates full AI evaluation (ATS score, missing skills, summary, model version).
-func (r *ATSRepo) UpdateAIFeedback(ctx context.Context, id string, atsScore, skillMatchPct *int, missingSkills []string, experienceMatch, aiSummary, modelVersion *string, processedAt time.Time) error {
+// UpdateAIFeedback updates full AI evaluation (ATS score, missing skills, experience warnings, keyword/semantic matches, summary, model version).
+func (r *ATSRepo) UpdateAIFeedback(ctx context.Context, id string, atsScore, skillMatchPct *int, missingSkills []string, experienceMatch, aiSummary, modelVersion *string, experienceWarnings, keywordMatches, semanticMatches []string, processedAt time.Time) error {
 	var missingJSON []byte
 	if len(missingSkills) > 0 {
 		missingJSON, _ = json.Marshal(missingSkills)
 	}
+	var expWarnJSON, keywordJSON, semanticJSON []byte
+	if len(experienceWarnings) > 0 {
+		expWarnJSON, _ = json.Marshal(experienceWarnings)
+	}
+	if len(keywordMatches) > 0 {
+		keywordJSON, _ = json.Marshal(keywordMatches)
+	}
+	if len(semanticMatches) > 0 {
+		semanticJSON, _ = json.Marshal(semanticMatches)
+	}
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE ats_records SET ats_score = $1, skill_match_pct = $2, missing_skills = $3, experience_match = $4, ai_summary = $5, model_version = $6, ai_processed_at = $7, updated_at = CURRENT_TIMESTAMP
-		 WHERE id = $8 AND deleted_at IS NULL`,
-		atsScore, skillMatchPct, missingJSON, experienceMatch, aiSummary, modelVersion, processedAt, id)
+		`UPDATE ats_records SET ats_score = $1, skill_match_pct = $2, missing_skills = $3, experience_match = $4, experience_warnings = $5, keyword_matches = $6, semantic_matches = $7, ai_summary = $8, model_version = $9, ai_processed_at = $10, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $11 AND deleted_at IS NULL`,
+		atsScore, skillMatchPct, missingJSON, experienceMatch, expWarnJSON, keywordJSON, semanticJSON, aiSummary, modelVersion, processedAt, id)
 	return err
 }
 
@@ -151,10 +161,10 @@ func scanATSRecord(row *sql.Row) (*entities.ATSRecord, error) {
 	var status string
 	var atsScore, skillMatchPct sql.NullInt64
 	var experienceMatch, aiSummary, modelVersion sql.NullString
-	var missingSkillsJSON []byte
+	var missingSkillsJSON, expWarningsJSON, keywordMatchesJSON, semanticMatchesJSON []byte
 	err := row.Scan(&a.ID, &a.JobID, &a.CandidateID, &a.ResumeID, &status,
 		&a.SkillMatchScore, &a.RankingScore, &a.Qualified, &a.AIProcessedAt,
-		&atsScore, &skillMatchPct, &missingSkillsJSON, &experienceMatch, &aiSummary, &modelVersion,
+		&atsScore, &skillMatchPct, &missingSkillsJSON, &experienceMatch, &expWarningsJSON, &keywordMatchesJSON, &semanticMatchesJSON, &aiSummary, &modelVersion,
 		&a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -174,6 +184,15 @@ func scanATSRecord(row *sql.Row) (*entities.ATSRecord, error) {
 	if experienceMatch.Valid {
 		a.ExperienceMatch = &experienceMatch.String
 	}
+	if len(expWarningsJSON) > 0 {
+		_ = json.Unmarshal(expWarningsJSON, &a.ExperienceWarnings)
+	}
+	if len(keywordMatchesJSON) > 0 {
+		_ = json.Unmarshal(keywordMatchesJSON, &a.KeywordMatches)
+	}
+	if len(semanticMatchesJSON) > 0 {
+		_ = json.Unmarshal(semanticMatchesJSON, &a.SemanticMatches)
+	}
 	if aiSummary.Valid {
 		a.AISummary = &aiSummary.String
 	}
@@ -190,10 +209,10 @@ func scanATSRecords(rows *sql.Rows) ([]*entities.ATSRecord, error) {
 		var status string
 		var atsScore, skillMatchPct sql.NullInt64
 		var experienceMatch, aiSummary, modelVersion sql.NullString
-		var missingSkillsJSON []byte
+		var missingSkillsJSON, expWarningsJSON, keywordMatchesJSON, semanticMatchesJSON []byte
 		if err := rows.Scan(&a.ID, &a.JobID, &a.CandidateID, &a.ResumeID, &status,
 			&a.SkillMatchScore, &a.RankingScore, &a.Qualified, &a.AIProcessedAt,
-			&atsScore, &skillMatchPct, &missingSkillsJSON, &experienceMatch, &aiSummary, &modelVersion,
+			&atsScore, &skillMatchPct, &missingSkillsJSON, &experienceMatch, &expWarningsJSON, &keywordMatchesJSON, &semanticMatchesJSON, &aiSummary, &modelVersion,
 			&a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -211,6 +230,15 @@ func scanATSRecords(rows *sql.Rows) ([]*entities.ATSRecord, error) {
 		}
 		if experienceMatch.Valid {
 			a.ExperienceMatch = &experienceMatch.String
+		}
+		if len(expWarningsJSON) > 0 {
+			_ = json.Unmarshal(expWarningsJSON, &a.ExperienceWarnings)
+		}
+		if len(keywordMatchesJSON) > 0 {
+			_ = json.Unmarshal(keywordMatchesJSON, &a.KeywordMatches)
+		}
+		if len(semanticMatchesJSON) > 0 {
+			_ = json.Unmarshal(semanticMatchesJSON, &a.SemanticMatches)
 		}
 		if aiSummary.Valid {
 			a.AISummary = &aiSummary.String

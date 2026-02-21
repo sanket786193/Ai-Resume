@@ -55,6 +55,8 @@ Service listens on port 8000. Set `AI_SERVICE_URL=http://localhost:8000` and `AI
 
 Run Ollama and pull a model, e.g. `ollama run llama3:8b`. Set `OLLAMA_MODEL=llama3:8b` in `.env` if needed (default `llama3.2`). ADK uses LiteLlm with `ollama_chat/<model>`.
 
+**Timeouts:** The service waits up to `OLLAMA_TIMEOUT_SEC` (default 50s) for Ollama generate. This is kept below the Go backend’s AI client timeout (~60s) so that when Ollama is slow or times out, the service can return the heuristic fallback and the client still gets a response. For slower models, set `OLLAMA_TIMEOUT_SEC` higher and increase `AI_TIMEOUT_SEC` in the Go backend accordingly.
+
 ## gRPC (Go ↔ Python)
 
 - **Proto**: Shared definitions live in `backend/proto/ats/screening.proto`.

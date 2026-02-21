@@ -1,4 +1,5 @@
 """Resume parse endpoint: raw text, structured fields, cleaned text (best practice: keep separately)."""
+from urllib.parse import quote, unquote, urlparse, urlunparse
 from fastapi import APIRouter, HTTPException
 import httpx
 from pypdf import PdfReader
@@ -18,14 +19,40 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _normalize_resume_url(url: str) -> str:
+    """
+    Normalize URL path so path segments are properly percent-encoded.
+    Supabase Storage (and some CDNs) can return 400 for paths with unencoded
+    spaces or parentheses; encoding the path often fixes the request.
+    """
+    try:
+        parsed = urlparse(url)
+        if not parsed.path:
+            return url
+        # Decode then re-encode each path segment (avoids double-encoding).
+        segments = [quote(unquote(s), safe="") for s in parsed.path.split("/")]
+        new_path = "/".join(segments)
+        return urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            new_path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        ))
+    except Exception:
+        return url
+
+
 def _fetch_resume_text(url_or_content: str) -> str:
     """If input looks like a URL, fetch and extract PDF text; else return as-is."""
     s = (url_or_content or "").strip()
     if not s.startswith(("http://", "https://")):
         return s
+    fetch_url = _normalize_resume_url(s)
     try:
         with httpx.Client(timeout=30) as client:
-            r = client.get(s)
+            r = client.get(fetch_url)
             r.raise_for_status()
             content_type = (r.headers.get("content-type") or "").lower()
             if "pdf" in content_type or s.lower().endswith(".pdf"):

@@ -34,6 +34,15 @@ func (a *aiAdapter) ScreenResume(ctx context.Context, resumeContentOrPath, jobDe
 	if resp.ExperienceMatch != nil {
 		out.ExperienceMatch = resp.ExperienceMatch
 	}
+	if len(resp.ExperienceWarnings) > 0 {
+		out.ExperienceWarnings = resp.ExperienceWarnings
+	}
+	if len(resp.KeywordMatches) > 0 {
+		out.KeywordMatches = resp.KeywordMatches
+	}
+	if len(resp.SemanticMatches) > 0 {
+		out.SemanticMatches = resp.SemanticMatches
+	}
 	if resp.Summary != nil {
 		out.Summary = resp.Summary
 	}

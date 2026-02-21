@@ -13,6 +13,11 @@ export const ROUTES = {
   HR_JOB_CREATE: '/hr/jobs/new',
   HR_JOB_EDIT: '/hr/jobs/:jobId/edit',
   HR_JOB_APPLICANTS: '/hr/jobs/:jobId/applicants',
+  HR_APPLICANT_DETAIL: '/hr/jobs/:jobId/applicants/:applicationId',
+  HR_APPLICANT_CONTACT: '/hr/jobs/:jobId/applicants/:applicationId/contact',
+  HR_APPLICANT_APPLICATION: '/hr/jobs/:jobId/applicants/:applicationId/application',
+  HR_APPLICANT_RESUME: '/hr/jobs/:jobId/applicants/:applicationId/resume',
+  HR_APPLICANT_AI: '/hr/jobs/:jobId/applicants/:applicationId/ai',
   HR_ATS: '/hr/ats',
   HR_INTERVIEWS: '/hr/interviews',
   HR_OFFERS: '/hr/offers',
@@ -28,6 +33,8 @@ export const ROUTES = {
 export const ROUTE_BUILDERS = {
   hrJobEdit: (jobId) => `/hr/jobs/${jobId}/edit`,
   hrJobApplicants: (jobId) => `/hr/jobs/${jobId}/applicants`,
+  hrApplicantDetail: (jobId, applicationId, tab = 'contact') =>
+    `/hr/jobs/${jobId}/applicants/${applicationId}/${tab}`,
   publicJobDetail: (jobId) => `/jobs/${jobId}`,
   publicApply: (jobId) => `/jobs/${jobId}/apply`,
 }

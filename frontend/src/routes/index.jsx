@@ -11,6 +11,11 @@ const HrRegisterPage = lazy(() => import('@/app/auth/HrRegisterPage').then((m) =
 const HrDashboardPage = lazy(() => import('@/app/hr/HrDashboardPage').then((m) => ({ default: m.HrDashboardPage })))
 const HrJobsPage = lazy(() => import('@/app/hr/HrJobsPage').then((m) => ({ default: m.HrJobsPage })))
 const HrJobApplicantsPage = lazy(() => import('@/app/hr/HrJobApplicantsPage').then((m) => ({ default: m.HrJobApplicantsPage })))
+const ApplicantDetailLayout = lazy(() => import('@/app/hr/ApplicantDetailLayout').then((m) => ({ default: m.ApplicantDetailLayout })))
+const ApplicantContactPage = lazy(() => import('@/app/hr/applicant/ApplicantContactPage').then((m) => ({ default: m.ApplicantContactPage })))
+const ApplicantApplicationPage = lazy(() => import('@/app/hr/applicant/ApplicantApplicationPage').then((m) => ({ default: m.ApplicantApplicationPage })))
+const ApplicantResumePage = lazy(() => import('@/app/hr/applicant/ApplicantResumePage').then((m) => ({ default: m.ApplicantResumePage })))
+const ApplicantAIPage = lazy(() => import('@/app/hr/applicant/ApplicantAIPage').then((m) => ({ default: m.ApplicantAIPage })))
 const HrAtsPage = lazy(() => import('@/app/hr/HrAtsPage').then((m) => ({ default: m.HrAtsPage })))
 const HrInterviewsPage = lazy(() => import('@/app/hr/HrInterviewsPage').then((m) => ({ default: m.HrInterviewsPage })))
 const HrOffersPage = lazy(() => import('@/app/hr/HrOffersPage').then((m) => ({ default: m.HrOffersPage })))
@@ -62,6 +67,17 @@ const router = createBrowserRouter([
           { path: 'jobs/new', element: <LazyRoute Component={HrJobsPage} /> },
           { path: 'jobs/:jobId/edit', element: <LazyRoute Component={HrJobsPage} /> },
           { path: 'jobs/:jobId/applicants', element: <LazyRoute Component={HrJobApplicantsPage} /> },
+          {
+            path: 'jobs/:jobId/applicants/:applicationId',
+            element: <LazyRoute Component={ApplicantDetailLayout} />,
+            children: [
+              { index: true, element: <Navigate to="contact" replace /> },
+              { path: 'contact', element: <LazyRoute Component={ApplicantContactPage} /> },
+              { path: 'application', element: <LazyRoute Component={ApplicantApplicationPage} /> },
+              { path: 'resume', element: <LazyRoute Component={ApplicantResumePage} /> },
+              { path: 'ai', element: <LazyRoute Component={ApplicantAIPage} /> },
+            ],
+          },
           { path: 'ats', element: <LazyRoute Component={HrAtsPage} /> },
           { path: 'interviews', element: <LazyRoute Component={HrInterviewsPage} /> },
           { path: 'offers', element: <LazyRoute Component={HrOffersPage} /> },

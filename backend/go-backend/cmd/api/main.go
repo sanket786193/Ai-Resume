@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -80,6 +81,7 @@ func main() {
 
 	candidateSvc := candidates.NewService(candidateRepo, resumeRepo, atsRepo, jobRepo)
 	var resumeUploader candidates.ResumeUploader
+	var atsResumeURLResolver ats.ResumeURLResolver
 	if cfg.SupabaseStorage.Enabled && cfg.SupabaseStorage.URL != "" && cfg.SupabaseStorage.ServiceRoleKey != "" && cfg.SupabaseStorage.Bucket != "" {
 		sb := supabase.NewClient(supabase.Config{
 			URL:            cfg.SupabaseStorage.URL,
@@ -87,10 +89,19 @@ func main() {
 			Bucket:         cfg.SupabaseStorage.Bucket,
 		})
 		resumeUploader = &supabaseResumeUploader{client: sb}
+		atsResumeURLResolver = func(storagePath string) string {
+			if storagePath == "" {
+				return ""
+			}
+			if strings.HasPrefix(storagePath, "http://") || strings.HasPrefix(storagePath, "https://") {
+				return storagePath
+			}
+			return sb.PublicURL(storagePath)
+		}
 	}
 	candidateHandler := candidates.NewHandler(candidateSvc, resumeUploader)
 
-	atsSvc := ats.NewService(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, atsAIClient, cfg.AI.Enabled)
+	atsSvc := ats.NewServiceWithResolver(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, atsAIClient, cfg.AI.Enabled, atsResumeURLResolver)
 	atsHandler := ats.NewHandler(atsSvc)
 
 	interviewSvc := interviews.NewService(interviewRepo, atsRepo)

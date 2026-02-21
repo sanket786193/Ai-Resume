@@ -22,6 +22,9 @@ class ScreenResponse(BaseModel):
     skill_match_pct: Optional[int] = Field(None, ge=0, le=100)
     missing_skills: Optional[List[str]] = None
     experience_match: Optional[str] = None
+    experience_warnings: Optional[List[str]] = None
+    keyword_matches: Optional[List[str]] = None
+    semantic_matches: Optional[List[str]] = None
     summary: Optional[str] = None
     model_version: Optional[str] = None
 

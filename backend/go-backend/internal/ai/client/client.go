@@ -24,15 +24,18 @@ type ScreenRequest struct {
 
 // ScreenResponse is returned by the AI service (full ATS evaluation).
 type ScreenResponse struct {
-	SkillMatchScore   float64   `json:"skill_match_score"`
-	RankingScore      float64   `json:"ranking_score"`
-	Qualified         bool      `json:"qualified"`
-	ATSScore          *int      `json:"ats_score,omitempty"`
-	SkillMatchPct     *int      `json:"skill_match_pct,omitempty"`
-	MissingSkills     []string  `json:"missing_skills,omitempty"`
-	ExperienceMatch   *string   `json:"experience_match,omitempty"`
-	Summary           *string   `json:"summary,omitempty"`
-	ModelVersion      *string   `json:"model_version,omitempty"`
+	SkillMatchScore     float64  `json:"skill_match_score"`
+	RankingScore        float64  `json:"ranking_score"`
+	Qualified           bool     `json:"qualified"`
+	ATSScore            *int     `json:"ats_score,omitempty"`
+	SkillMatchPct       *int     `json:"skill_match_pct,omitempty"`
+	MissingSkills       []string `json:"missing_skills,omitempty"`
+	ExperienceMatch     *string  `json:"experience_match,omitempty"`
+	ExperienceWarnings  []string `json:"experience_warnings,omitempty"`
+	KeywordMatches      []string `json:"keyword_matches,omitempty"`
+	SemanticMatches     []string `json:"semantic_matches,omitempty"`
+	Summary             *string  `json:"summary,omitempty"`
+	ModelVersion        *string  `json:"model_version,omitempty"`
 }
 
 // New creates an AI client.

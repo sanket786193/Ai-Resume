@@ -39,6 +39,9 @@ def screen_resume(req: ScreenRequest) -> ScreenResponse:
             skill_match_pct=result.skill_match_pct,
             missing_skills=result.missing_skills,
             experience_match=result.experience_match,
+            experience_warnings=result.experience_warnings,
+            keyword_matches=result.keyword_matches,
+            semantic_matches=result.semantic_matches,
             summary=result.summary,
             model_version=result.model_version,
         )
