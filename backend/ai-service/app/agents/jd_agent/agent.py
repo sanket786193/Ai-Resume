@@ -99,6 +99,9 @@ Follow the steps below strictly.
     - No explanations, markdown, or comments
     - Use null for missing values
 
+Job description to analyze:
+{jd_text}
+
 Return the output using the following JSON schema:
 
 {
@@ -125,7 +128,8 @@ Return the output using the following JSON schema:
 root_agent = Agent(
     name="JobDescriptionAgent",
     model=ollama_model,
-    description="Job description analysis agent",
+    description="Parse job description into structured JSON for matching",
     instruction=jd_instruction,
     tools=[],
+    output_key="parsed_jd",
 )

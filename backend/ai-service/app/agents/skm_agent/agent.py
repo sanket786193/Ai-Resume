@@ -60,6 +60,12 @@ You must strictly follow the rules below.
    - Do NOT include explanations, markdown, or comments
    - Ensure classification labels are consistent
 
+Resume skills (from upstream):
+{parsed_resume?}
+
+Job required skills (from upstream):
+{parsed_jd?}
+
 Return the output using the following JSON schema:
 
 {
@@ -83,7 +89,8 @@ Return the output using the following JSON schema:
 root_agent = Agent(
     name="SkillMatchingAgent",
     model=ollama_model,
-    description="Skill keyword matching agent",
+    description="Match resume skills to job required skills",
     instruction=skm_instruction,
     tools=[],
+    output_key="skm_result",
 )

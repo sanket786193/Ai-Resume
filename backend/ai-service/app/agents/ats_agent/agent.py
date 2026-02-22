@@ -66,24 +66,36 @@ You must strictly follow the rules below.
    - Do NOT include explanations, markdown, or comments
    - Ensure numeric values are consistent and logically correct
 
+For rule-based pipeline compatibility, also output these booleans (true/false):
+   - keyword_density_ok: job keywords appear with reasonable density in resume
+   - standard_headings: resume has clear standard sections (Skills, Experience, Education)
+   - readable_format: resume is easy to parse and read
+   - no_tables_or_graphics: resume does not rely on tables or images for key content
+
+Structured resume (from upstream):
+{parsed_resume?}
+
+Structured job description (from upstream):
+{parsed_jd?}
+
 Return the output using the following JSON schema:
 
 {
   "ats_score": 0,
-  "score_breakdown": {
-    "skill_match": 0,
-    "experience_match": 0,
-    "keyword_optimization": 0,
-    "structure_readability": 0
-  },
-  "status": "POOR_MATCH | AVERAGE_MATCH | GOOD_MATCH | STRONG_MATCH"
+  "score_breakdown": {"skill_match": 0, "experience_match": 0, "keyword_optimization": 0, "structure_readability": 0},
+  "status": "POOR_MATCH | AVERAGE_MATCH | GOOD_MATCH | STRONG_MATCH",
+  "keyword_density_ok": false,
+  "standard_headings": false,
+  "readable_format": false,
+  "no_tables_or_graphics": false
 }
 """
 
 root_agent = Agent(
     name="ATSScoringAgent",
     model=ollama_model,
-    description="ATS scoring agent",
+    description="ATS compatibility and structure scoring",
     instruction=ats_instruction,
     tools=[],
+    output_key="ats_result",
 )

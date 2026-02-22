@@ -47,7 +47,7 @@ Service listens on port 8000. Set `AI_SERVICE_URL=http://localhost:8000` and `AI
 
 ## Screening flow
 
-1. **ADK pipeline** (if available): resume → JD → NLP → ATS → SKM → rule-based scoring → `final_score` (0–100) mapped to Go contract.
+1. **ADK pipeline** (if available): Runs via Runner + session with initial state `resume_text`, `jd_text`. Sequential agents: **Resume** (→ `parsed_resume`) → **JD** (→ `parsed_jd`) → **NLP** (→ `nlp_result`: grammar/language) → **ATS** (→ `ats_result`: structure/keywords) → **SKM** (→ `skm_result`) → **Rule-based scoring** (reads state, writes `final_score` 0–100). Result mapped to Go contract.
 2. **Ollama only**: single LLM call for scores (fallback if ADK fails).
 3. **Heuristic**: keyword overlap (fallback if Ollama unavailable).
 

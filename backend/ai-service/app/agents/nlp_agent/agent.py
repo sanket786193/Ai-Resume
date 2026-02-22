@@ -64,6 +64,14 @@ You must strictly follow the steps below.
    - Use null for missing data
    - Do NOT infer or guess information
 
+For rule-based scoring compatibility, your JSON MUST include these language-quality fields:
+   - grammar_accuracy: number 0-100 (estimate of grammatical correctness)
+   - clear_sentences: boolean (true if sentences are clear and well-structured)
+   - professional_tone: boolean (true if tone is professional)
+
+Resume / structured input to evaluate (from upstream):
+{parsed_resume?}
+
 Return the output using the following JSON schema:
 
 {
@@ -71,23 +79,21 @@ Return the output using the following JSON schema:
   "role": "",
   "summary": "",
   "skills": [],
-  "experience": [
-    {
-      "company": "",
-      "duration": "",
-      "responsibilities": []
-    }
-  ],
+  "experience": [{"company": "", "duration": "", "responsibilities": []}],
   "projects": [],
   "education": [],
-  "certifications": []
+  "certifications": [],
+  "grammar_accuracy": 0,
+  "clear_sentences": false,
+  "professional_tone": false
 }
 """
 
 root_agent = Agent(
     name="NLPAgent",
     model=ollama_model,
-    description="Natural language processing agent",
+    description="NLP preprocessing and language quality for resume text",
     instruction=NLP_instruction,
     tools=[],
+    output_key="nlp_result",
 )

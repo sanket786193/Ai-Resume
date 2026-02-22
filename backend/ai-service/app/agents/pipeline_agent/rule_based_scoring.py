@@ -5,7 +5,7 @@ from typing import Any, Dict
 class RuleBasedScoringEngine:
     def calculate_skills_score(self, required: list, candidate: list) -> float:
         if not required:
-            return 0.0
+            return 15.0  # No required skills specified: give baseline instead of 0
         matched = len(set(required).intersection(set(candidate)))
         return min((matched / len(required)) * 30, 30)
 

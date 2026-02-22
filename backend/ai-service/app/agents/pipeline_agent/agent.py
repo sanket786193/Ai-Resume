@@ -8,7 +8,8 @@ from app.agents.pipeline_agent.pipeline_runner import ScoringAgent
 from app.agents.resume_parsing import root_agent as resume_agent
 from app.agents.skm_agent import root_agent as skm_agent
 
-scoring_agent = ScoringAgent()
+# ScoringAgent is a singleton instance (rule-based, no LLM)
+scoring_agent = ScoringAgent
 
 screening_pipeline = SequentialAgent(
     name="ScreeningPipeline",
