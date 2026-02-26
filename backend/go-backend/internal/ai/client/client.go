@@ -67,9 +67,54 @@ type ParseRequest struct {
 
 // ParseResponse is returned by the AI service parse endpoint.
 type ParseResponse struct {
-	RawText    string          `json:"raw_text"`
-	Parsed     json.RawMessage `json:"parsed"`
-	CleanedText string         `json:"cleaned_text"`
+	RawText     string          `json:"raw_text"`
+	Parsed      json.RawMessage `json:"parsed"`
+	CleanedText string          `json:"cleaned_text"`
+}
+
+// EmbedRequest is sent to POST /embed.
+type EmbedRequest struct {
+	Text string `json:"text"`
+}
+
+// EmbedResponse is returned by the AI service embed endpoint.
+type EmbedResponse struct {
+	Embedding   []float64 `json:"embedding"`
+	ModelVersion *string  `json:"model_version,omitempty"`
+}
+
+// Embed calls the Python service to get embedding vector for text (e.g. cleaned resume).
+func (c *Client) Embed(ctx context.Context, text string) ([]float64, string, error) {
+	if !c.enabled || text == "" {
+		return nil, "", nil
+	}
+	reqBody := EmbedRequest{Text: text}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/embed", bytes.NewReader(body))
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("ai embed returned %d", resp.StatusCode)
+	}
+	var out EmbedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, "", err
+	}
+	modelVer := ""
+	if out.ModelVersion != nil {
+		modelVer = *out.ModelVersion
+	}
+	return out.Embedding, modelVer, nil
 }
 
 // Parse calls the Python service to parse resume (URL or raw text); returns raw_text, parsed_json, cleaned_text.

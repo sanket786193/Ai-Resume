@@ -1,4 +1,4 @@
-"""Orchestrates resume screening: ADK pipeline first, then Ollama/heuristic fallback."""
+"""Orchestrates resume screening: Ollama (55s timeout), then heuristic."""
 import json
 import re
 from dataclasses import dataclass
@@ -33,7 +33,7 @@ class ScreeningResult:
 
 
 class ScreeningService:
-    """Runs resume screening: ADK pipeline first, then Ollama, then heuristic."""
+    """Runs resume screening: Ollama (55s timeout), then heuristic fallback."""
 
     def __init__(self, ollama_client: Optional[OllamaClient] = None) -> None:
         self.ollama = ollama_client or OllamaClient()
@@ -59,7 +59,7 @@ class ScreeningService:
         job_text = (job_description or "").strip()
         if not job_text:
             job_text = "General role"
-        # Enrich job text with requirements for ADK/Ollama when provided
+        # Enrich job text with requirements for Ollama when provided
         if job_requirements:
             parts = [job_text]
             if job_requirements.skills:
@@ -70,48 +70,29 @@ class ScreeningService:
                 parts.append("Qualification: " + job_requirements.qualification)
             job_text = "\n\n".join(parts)
 
-        # 1) Try Google ADK pipeline (resume -> jd -> nlp -> ats -> skm -> rule-based scoring)
-        try:
-            from app.services.adk_screening import adk_result_to_scores, run_adk_pipeline
-
-            adk_result = run_adk_pipeline(resume_text, job_text)
-            if adk_result and "final_score" in adk_result:
-                skill, rank, qual = adk_result_to_scores(adk_result)
-                return ScreeningResult(
-                    skill_match_score=skill,
-                    ranking_score=rank,
-                    qualified=qual,
-                )
-        except Exception as e:
-            logger.warning("ADK screening failed, using fallback: %s", e)
-
-        # 2) Ollama-only scoring (full ATS evaluation: ats_score, missing_skills, summary)
+        # 1) Ollama (55s timeout; ats_score, missing_skills, summary)
         try:
             if self.ollama.is_available():
                 return self._screen_with_ollama(resume_text, job_text, vector_similarity)
         except OllamaUnavailableError:
-            logger.warning("Ollama unavailable (timeout or unreachable), using fallback heuristic scoring")
+            logger.warning("Ollama unavailable (timeout or unreachable), using heuristic fallback")
 
-        # 3) Heuristic (use required skills for overlap when provided)
+        # 2) Heuristic (use required skills for overlap when provided)
         return self._fallback_heuristic(resume_text, job_text, job_requirements)
 
     def _screen_with_ollama(
         self, resume_text: str, job_text: str, vector_similarity: Optional[float] = None
     ) -> ScreeningResult:
         model = get_settings().ollama_model
-        sim_note = f" Vector similarity (resume-job): {vector_similarity:.2f}." if vector_similarity is not None else ""
+        sim_note = f" Vector similarity: {vector_similarity:.2f}." if vector_similarity is not None else ""
+        # Shorter system prompt and inputs for faster response (<60s total)
         system = (
-            "You are an ATS assistant. Evaluate the candidate resume against the job description. "
-            "Reply with ONLY a single JSON object, no markdown or extra text. Keys: ats_score (0-100), "
-            "skill_match_pct (0-100), missing_skills (array of required job skills/terms not found or weak in resume), "
-            "experience_match (short string, e.g. Good/Fair/Low), experience_warnings (array of strings: specific experience mismatches, e.g. 'Years in X below requirement'), "
-            "keyword_matches (array of job skills/terms that appear verbatim or near-verbatim in the resume), "
-            "semantic_matches (array of job skills/requirements that are satisfied by resume meaning even if different words used), "
-            "summary (detailed candidate resume summary: 3-5 sentences covering the candidate's key experience, main skills, and how they fit the role; be specific and informative), qualified (boolean)."
+            "ATS assistant. Output ONLY one JSON object, no markdown. Keys: ats_score (0-100), skill_match_pct (0-100), "
+            "missing_skills (array), experience_match (Good/Fair/Low), experience_warnings (array), "
+            "keyword_matches (array), semantic_matches (array), summary (3-5 sentences: experience, skills, fit), qualified (boolean)."
         )
         prompt = (
-            f"Resume excerpt:\n{resume_text[:4000]}\n\nJob description:\n{job_text[:2500]}\n\n{sim_note}\n\n"
-            "Output JSON only:"
+            f"Resume:\n{resume_text[:2500]}\n\nJD:\n{job_text[:1500]}{sim_note}\n\nJSON only:"
         )
         response = self.ollama.generate(prompt, system=system).strip()
         return self._parse_ollama_json_response(response, model)
@@ -160,22 +141,6 @@ class ScreeningService:
             )
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             logger.warning("Ollama JSON parse failed: %s", e)
-        return self._fallback_result()
-
-    def _parse_ollama_response(self, response: str) -> ScreeningResult:
-        try:
-            parts = response.split()
-            if len(parts) >= 3:
-                skill = float(parts[0])
-                rank = float(parts[1])
-                qual = parts[2] in ("1", "true", "yes")
-                return ScreeningResult(
-                    skill_match_score=max(0.0, min(1.0, skill)),
-                    ranking_score=max(0.0, min(1.0, rank)),
-                    qualified=qual,
-                )
-        except (ValueError, IndexError):
-            pass
         return self._fallback_result()
 
     def _fallback_heuristic(

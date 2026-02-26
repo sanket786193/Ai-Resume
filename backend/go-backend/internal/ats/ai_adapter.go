@@ -61,6 +61,11 @@ func (a *aiAdapter) Parse(ctx context.Context, resumePathOrContent string) (rawT
 	return resp.RawText, resp.Parsed, resp.CleanedText, nil
 }
 
+// Embed calls the AI service embed endpoint and returns the embedding vector and model version.
+func (a *aiAdapter) Embed(ctx context.Context, text string) ([]float64, string, error) {
+	return a.client.Embed(ctx, text)
+}
+
 // NewAIAdapter returns an AIClient that uses the given HTTP client.
 func NewAIAdapter(c *client.Client) AIClient {
 	return &aiAdapter{client: c}

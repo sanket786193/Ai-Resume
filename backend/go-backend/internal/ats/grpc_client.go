@@ -61,6 +61,11 @@ func (c *grpcAIClient) Parse(ctx context.Context, resumePathOrContent string) (r
 	return "", nil, "", nil
 }
 
+// Embed implements AIClient (no-op for gRPC; use HTTP adapter for embed).
+func (c *grpcAIClient) Embed(ctx context.Context, text string) ([]float64, string, error) {
+	return nil, "", nil
+}
+
 // noopAIClient returns empty result when AI is disabled.
 type noopAIClient struct{}
 
@@ -70,4 +75,8 @@ func (noopAIClient) ScreenResume(context.Context, string, string, *client.JobReq
 
 func (noopAIClient) Parse(context.Context, string) (string, []byte, string, error) {
 	return "", nil, "", nil
+}
+
+func (noopAIClient) Embed(context.Context, string) ([]float64, string, error) {
+	return nil, "", nil
 }

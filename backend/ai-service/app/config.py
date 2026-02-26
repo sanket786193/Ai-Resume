@@ -24,10 +24,10 @@ class Settings:
 
     # Ollama (local LLM)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3:8b"
+    ollama_model: str = "llama3:8b"  # For faster screening use a smaller model: OLLAMA_MODEL=llama3.2:3b or phi3:mini
     ollama_embed_model: str = "nomic-embed-text"
     ollama_embed_dim: int = 768
-    ollama_timeout_sec: int = 50  # keep under Go client timeout (~60s) so fallback returns in sync; override with OLLAMA_TIMEOUT_SEC for slow models
+    ollama_timeout_sec: int = 55  # screen call; set OLLAMA_TIMEOUT_SEC if model needs more (e.g. 60)
 
     # Logging
     log_level: str = "INFO"

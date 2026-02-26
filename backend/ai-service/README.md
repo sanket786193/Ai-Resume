@@ -1,6 +1,6 @@
 # ATS AI Service (Python)
 
-Resume screening and ranking for the Go ATS backend. Uses **Google ADK** (Agent Development Kit) with Ollama when available; modular, readable, and scalable.
+Resume screening and ranking for the Go ATS backend. Uses **Ollama** for LLM-based screening when available, with heuristic fallback; modular and scalable.
 
 ## Contract with Go backend
 
@@ -40,20 +40,18 @@ Service listens on port 8000. Set `AI_SERVICE_URL=http://localhost:8000` and `AI
 - **app/main.py** – FastAPI app and lifespan
 - **app/config.py** – Settings from env
 - **app/api/** – Routes (health, screen); schemas match Go
-- **app/services/** – Screening (ADK pipeline → Ollama → heuristic), adk_screening, resume_parser
-- **app/agents/** – Google ADK agents: resume_parsing, jd_agent, nlp_agent, ats_agent, skm_agent, pipeline_agent (rule-based scoring)
+- **app/services/** – Screening (Ollama → heuristic), resume_parser
 - **app/clients/** – Ollama client, Go backend client
 - **app/core/** – Logging, exceptions
 
 ## Screening flow
 
-1. **ADK pipeline** (if available): Runs via Runner + session with initial state `resume_text`, `jd_text`. Sequential agents: **Resume** (→ `parsed_resume`) → **JD** (→ `parsed_jd`) → **NLP** (→ `nlp_result`: grammar/language) → **ATS** (→ `ats_result`: structure/keywords) → **SKM** (→ `skm_result`) → **Rule-based scoring** (reads state, writes `final_score` 0–100). Result mapped to Go contract.
-2. **Ollama only**: single LLM call for scores (fallback if ADK fails).
-3. **Heuristic**: keyword overlap (fallback if Ollama unavailable).
+1. **Ollama**: Single LLM call (shorter resume/JD excerpts → JSON). Timeout 55s default; set `OLLAMA_TIMEOUT_SEC=60` if the model still times out.
+2. **Heuristic**: Keyword/skill overlap (fallback when Ollama is unavailable or times out).
 
 ## Ollama
 
-Run Ollama and pull a model, e.g. `ollama run llama3:8b`. Set `OLLAMA_MODEL=llama3:8b` in `.env` if needed (default `llama3.2`). ADK uses LiteLlm with `ollama_chat/<model>`.
+Run Ollama and pull a model, e.g. `ollama run llama3:8b`. Default in config: `llama3:8b`. For faster response use a smaller model: `OLLAMA_MODEL=llama3.2:3b` or `phi3:mini`.
 
 **Timeouts:** The service waits up to `OLLAMA_TIMEOUT_SEC` (default 50s) for Ollama generate. This is kept below the Go backend’s AI client timeout (~60s) so that when Ollama is slow or times out, the service can return the heuristic fallback and the client still gets a response. For slower models, set `OLLAMA_TIMEOUT_SEC` higher and increase `AI_TIMEOUT_SEC` in the Go backend accordingly.
 

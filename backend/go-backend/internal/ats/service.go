@@ -15,10 +15,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// AIClient interface for resume screening and parsing (advisory only).
+// AIClient interface for resume screening, parsing, and embedding.
 type AIClient interface {
 	ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string, jobRequirements *client.JobRequirements) (*AIScreenResult, error)
 	Parse(ctx context.Context, resumePathOrContent string) (rawText string, parsedJSON []byte, cleanedText string, err error)
+	Embed(ctx context.Context, text string) (embedding []float64, modelVersion string, err error)
 }
 
 // AIScreenResult from Python AI service (full ATS evaluation).
@@ -91,6 +92,7 @@ type Service struct {
 	jobRepo           *postgres.JobRepo
 	resumeRepo        *postgres.ResumeRepo
 	parsedRepo        *postgres.ResumeParsedRepo
+	embeddingRepo     *postgres.ResumeEmbeddingRepo
 	candidateRepo     *postgres.CandidateRepo
 	userRepo          *postgres.UserRepo
 	interviewRepo     *postgres.InterviewRepo
@@ -107,6 +109,7 @@ func NewService(
 	jobRepo *postgres.JobRepo,
 	resumeRepo *postgres.ResumeRepo,
 	parsedRepo *postgres.ResumeParsedRepo,
+	embeddingRepo *postgres.ResumeEmbeddingRepo,
 	candidateRepo *postgres.CandidateRepo,
 	userRepo *postgres.UserRepo,
 	interviewRepo *postgres.InterviewRepo,
@@ -119,6 +122,7 @@ func NewService(
 		jobRepo:       jobRepo,
 		resumeRepo:    resumeRepo,
 		parsedRepo:    parsedRepo,
+		embeddingRepo: embeddingRepo,
 		candidateRepo: candidateRepo,
 		userRepo:      userRepo,
 		interviewRepo: interviewRepo,
@@ -134,6 +138,7 @@ func NewServiceWithResolver(
 	jobRepo *postgres.JobRepo,
 	resumeRepo *postgres.ResumeRepo,
 	parsedRepo *postgres.ResumeParsedRepo,
+	embeddingRepo *postgres.ResumeEmbeddingRepo,
 	candidateRepo *postgres.CandidateRepo,
 	userRepo *postgres.UserRepo,
 	interviewRepo *postgres.InterviewRepo,
@@ -142,7 +147,7 @@ func NewServiceWithResolver(
 	aiEnabled bool,
 	resumeURLResolver ResumeURLResolver,
 ) *Service {
-	s := NewService(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, interviewRepo, offerRepo, ai, aiEnabled)
+	s := NewService(atsRepo, jobRepo, resumeRepo, parsedRepo, embeddingRepo, candidateRepo, userRepo, interviewRepo, offerRepo, ai, aiEnabled)
 	s.resumeURLResolver = resumeURLResolver
 	return s
 }
@@ -250,9 +255,11 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 		}
 	}
 
-	// 1) Parse resume and store in resume_parsed_data; mark resume as PROCESSED when done (Phase 3).
+	// 1) Parse resume and store in resume_parsed_data; store embedding in resume_embeddings; mark resume as PROCESSED when done.
+	var cleanedText string
 	if s.parsedRepo != nil {
-		rawText, parsedJSON, cleanedText, err := s.ai.Parse(ctx, resumeInput)
+		rawText, parsedJSON, cleaned, err := s.ai.Parse(ctx, resumeInput)
+		cleanedText = cleaned
 		if err != nil {
 			log.Printf("[ATS] AI parse failed for atsID=%s resumeID=%s: %v", atsID, resumeID, err)
 		} else if rawText != "" || len(parsedJSON) > 0 || cleanedText != "" {
@@ -260,6 +267,20 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 				log.Printf("[ATS] failed to persist parsed resume resumeID=%s: %v", resumeID, err)
 			} else {
 				_ = s.resumeRepo.UpdateStatus(ctx, resumeID, enums.ResumeProcessed)
+			}
+		}
+	}
+	// 1b) Store resume embedding for this job (for vector search)
+	if s.embeddingRepo != nil && cleanedText != "" {
+		rec, _ := s.atsRepo.GetByID(ctx, atsID)
+		if rec != nil && rec.CandidateID != "" {
+			embedding, modelVer, err := s.ai.Embed(ctx, cleanedText)
+			if err != nil {
+				log.Printf("[ATS] AI embed failed for atsID=%s resumeID=%s: %v", atsID, resumeID, err)
+			} else if len(embedding) > 0 {
+				if err := s.embeddingRepo.Upsert(ctx, resumeID, job.ID, rec.CandidateID, embedding, modelVer); err != nil {
+					log.Printf("[ATS] failed to persist resume embedding resumeID=%s: %v", resumeID, err)
+				}
 			}
 		}
 	}
@@ -276,12 +297,20 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 
 	// 3) Screen resume against job (AI service uses requirements when provided)
 	result, err := s.ai.ScreenResume(ctx, resumeInput, job.Description, req)
+	now := time.Now()
 	if err != nil {
 		log.Printf("[ATS] AI screen failed for atsID=%s: %v", atsID, err)
+		// Persist default scores and note so DB columns are not left NULL
+		defScore := 0.5
+		zero, half := 0, 50
+		qual := false
+		_ = s.atsRepo.UpdateAIScores(ctx, atsID, &defScore, &defScore, &qual, now)
+		note := "Screening did not complete (timeout or error)."
+		_ = s.atsRepo.UpdateAIFeedback(ctx, atsID, &zero, &half, nil, nil, &note, nil, nil, nil, nil, now)
+		_ = s.atsRepo.UpdateStatus(ctx, atsID, enums.ATSScreening)
 		return
 	}
 
-	now := time.Now()
 	_ = s.atsRepo.UpdateAIScores(ctx, atsID, &result.SkillMatchScore, &result.RankingScore, &result.Qualified, now)
 
 	// Persist full feedback when present; otherwise derive from scores so DB columns are populated (e.g. heuristic path)
@@ -301,12 +330,8 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 		}
 		skillMatchPct = &v
 	}
-	hasFeedback := atsScore != nil || skillMatchPct != nil || len(result.MissingSkills) > 0 ||
-		result.ExperienceMatch != nil || result.Summary != nil || result.ModelVersion != nil ||
-		len(result.ExperienceWarnings) > 0 || len(result.KeywordMatches) > 0 || len(result.SemanticMatches) > 0
-	if hasFeedback {
-		_ = s.atsRepo.UpdateAIFeedback(ctx, atsID, atsScore, skillMatchPct, result.MissingSkills, result.ExperienceMatch, result.Summary, result.ModelVersion, result.ExperienceWarnings, result.KeywordMatches, result.SemanticMatches, now)
-	}
+	// Always persist so ats_score, skill_match_pct, ai_summary etc. are never left NULL when we have a result
+	_ = s.atsRepo.UpdateAIFeedback(ctx, atsID, atsScore, skillMatchPct, result.MissingSkills, result.ExperienceMatch, result.Summary, result.ModelVersion, result.ExperienceWarnings, result.KeywordMatches, result.SemanticMatches, now)
 
 	// 4) Auto-shortlist when qualified and under vacancy limit (Phase 2); otherwise set to SCREENING
 	nextStatus := enums.ATSScreening

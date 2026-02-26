@@ -51,6 +51,7 @@ func main() {
 	candidateRepo := postgres.NewCandidateRepo(db.DB)
 	resumeRepo := postgres.NewResumeRepo(db.DB)
 	parsedRepo := postgres.NewResumeParsedRepo(db.DB)
+	embeddingRepo := postgres.NewResumeEmbeddingRepo(db.DB)
 	atsRepo := postgres.NewATSRepo(db.DB)
 	interviewRepo := postgres.NewInterviewRepo(db.DB)
 	offerRepo := postgres.NewOfferRepo(db.DB)
@@ -104,7 +105,7 @@ func main() {
 	candidateHandler := candidates.NewHandler(candidateSvc, resumeUploader)
 
 	notifSvc := notifications.NewServiceWithSMTP(&cfg.SMTP)
-	atsSvc := ats.NewServiceWithResolver(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, interviewRepo, offerRepo, atsAIClient, cfg.AI.Enabled, atsResumeURLResolver)
+	atsSvc := ats.NewServiceWithResolver(atsRepo, jobRepo, resumeRepo, parsedRepo, embeddingRepo, candidateRepo, userRepo, interviewRepo, offerRepo, atsAIClient, cfg.AI.Enabled, atsResumeURLResolver)
 	atsSvc.SetNotifier(notifSvc)
 	atsHandler := ats.NewHandler(atsSvc)
 
