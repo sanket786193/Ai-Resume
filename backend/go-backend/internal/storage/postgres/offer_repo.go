@@ -5,6 +5,8 @@ import (
 	"database/sql"
 
 	"resume/internal/domain/entities"
+
+	"github.com/lib/pq"
 )
 
 // OfferRepo persists offers.
@@ -50,6 +52,30 @@ func (r *OfferRepo) GetByATSID(ctx context.Context, atsID string) (*entities.Off
 		return nil, err
 	}
 	return &o, nil
+}
+
+// ListByATSIDs returns offers for any of the given ATS record IDs (for HR list).
+func (r *OfferRepo) ListByATSIDs(ctx context.Context, atsIDs []string) ([]*entities.Offer, error) {
+	if len(atsIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, ats_id, amount, currency, starts_at, status, responded_at, created_at, updated_at
+		 FROM offers WHERE ats_id = ANY($1) AND deleted_at IS NULL ORDER BY created_at DESC`,
+		pq.Array(atsIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*entities.Offer
+	for rows.Next() {
+		var o entities.Offer
+		if err := rows.Scan(&o.ID, &o.ATSID, &o.Amount, &o.Currency, &o.StartsAt, &o.Status, &o.RespondedAt, &o.CreatedAt, &o.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &o)
+	}
+	return list, rows.Err()
 }
 
 // UpdateStatus updates offer status and responded_at when accept/reject.

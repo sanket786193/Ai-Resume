@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { offersApi } from '@/services/api'
+import { MY_APPLICATIONS_QUERY_KEY } from '@/modules/jobs/hooks/useApplications'
 
 export const OFFERS_QUERY_KEY = ['offers']
 
@@ -17,6 +18,28 @@ export function useCreateOffer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OFFERS_QUERY_KEY })
       queryClient.invalidateQueries({ queryKey: ['ats', 'pipeline'] })
+    },
+  })
+}
+
+export function useAcceptOffer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ candidateId, offerId }) => offersApi.accept(candidateId, offerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OFFERS_QUERY_KEY })
+      queryClient.invalidateQueries({ queryKey: MY_APPLICATIONS_QUERY_KEY })
+    },
+  })
+}
+
+export function useRejectOffer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ candidateId, offerId }) => offersApi.reject(candidateId, offerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OFFERS_QUERY_KEY })
+      queryClient.invalidateQueries({ queryKey: MY_APPLICATIONS_QUERY_KEY })
     },
   })
 }

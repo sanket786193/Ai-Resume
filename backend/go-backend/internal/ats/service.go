@@ -60,6 +60,10 @@ type ApplicationDetailForHR struct {
 	CandidateLinkedIn  string    `json:"candidate_linkedin,omitempty"`
 	ResumeFileName     string    `json:"resume_file_name,omitempty"`
 	ResumeURL          string    `json:"resume_url,omitempty"` // public URL for PDF viewer
+	OfferID            string    `json:"offer_id,omitempty"`   // set when offer exists (candidate selected)
+	OfferStatus        string    `json:"offer_status,omitempty"`
+	OfferAmount        string    `json:"offer_amount,omitempty"`
+	OfferCurrency      string    `json:"offer_currency,omitempty"`
 	AIProcessedAt     *time.Time `json:"ai_processed_at,omitempty"`
 	SkillMatchPct     *int       `json:"skill_match_pct,omitempty"`
 	AISummary         string     `json:"ai_summary,omitempty"`
@@ -89,6 +93,8 @@ type Service struct {
 	parsedRepo        *postgres.ResumeParsedRepo
 	candidateRepo     *postgres.CandidateRepo
 	userRepo          *postgres.UserRepo
+	interviewRepo     *postgres.InterviewRepo
+	offerRepo         *postgres.OfferRepo
 	ai                AIClient
 	aiEnabled         bool
 	resumeURLResolver ResumeURLResolver
@@ -103,6 +109,8 @@ func NewService(
 	parsedRepo *postgres.ResumeParsedRepo,
 	candidateRepo *postgres.CandidateRepo,
 	userRepo *postgres.UserRepo,
+	interviewRepo *postgres.InterviewRepo,
+	offerRepo *postgres.OfferRepo,
 	ai AIClient,
 	aiEnabled bool,
 ) *Service {
@@ -113,6 +121,8 @@ func NewService(
 		parsedRepo:    parsedRepo,
 		candidateRepo: candidateRepo,
 		userRepo:      userRepo,
+		interviewRepo: interviewRepo,
+		offerRepo:     offerRepo,
 		ai:            ai,
 		aiEnabled:     aiEnabled,
 	}
@@ -126,11 +136,13 @@ func NewServiceWithResolver(
 	parsedRepo *postgres.ResumeParsedRepo,
 	candidateRepo *postgres.CandidateRepo,
 	userRepo *postgres.UserRepo,
+	interviewRepo *postgres.InterviewRepo,
+	offerRepo *postgres.OfferRepo,
 	ai AIClient,
 	aiEnabled bool,
 	resumeURLResolver ResumeURLResolver,
 ) *Service {
-	s := NewService(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, ai, aiEnabled)
+	s := NewService(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, interviewRepo, offerRepo, ai, aiEnabled)
 	s.resumeURLResolver = resumeURLResolver
 	return s
 }
@@ -359,14 +371,34 @@ func (s *Service) ListByCandidate(ctx context.Context, candidateID string, limit
 	return s.atsRepo.ListByCandidateID(ctx, candidateID, limit, offset)
 }
 
-// ApplicationWithJob is an ATS record enriched with job title and status for candidate UI.
-type ApplicationWithJob struct {
-	*entities.ATSRecord
-	JobTitle  string `json:"job_title"`
-	JobStatus string `json:"job_status"`
+// InterviewSummary for candidate UI when status is INTERVIEW.
+type InterviewSummary struct {
+	ID             string    `json:"id"`
+	ScheduledAt    time.Time `json:"scheduled_at"`
+	DurationMin    int       `json:"duration_minutes"`
+	Location       string    `json:"location"`
+	Round          int       `json:"round"`
+	Status         string    `json:"status"`
 }
 
-// ListByCandidateWithJobs returns applications with job title and job status for the candidate applications page.
+// OfferSummary for candidate/HR UI when offer exists (candidate selected).
+type OfferSummary struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"` // PENDING, ACCEPTED, REJECTED
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
+}
+
+// ApplicationWithJob is an ATS record enriched with job title, status, optional interview and offer for candidate UI.
+type ApplicationWithJob struct {
+	*entities.ATSRecord
+	JobTitle  string            `json:"job_title"`
+	JobStatus string            `json:"job_status"`
+	Interview *InterviewSummary `json:"interview,omitempty"`
+	Offer     *OfferSummary     `json:"offer,omitempty"`
+}
+
+// ListByCandidateWithJobs returns applications with job title, status, and interview details when status is INTERVIEW.
 func (s *Service) ListByCandidateWithJobs(ctx context.Context, candidateID string, limit, offset int) ([]*ApplicationWithJob, error) {
 	list, err := s.ListByCandidate(ctx, candidateID, limit, offset)
 	if err != nil {
@@ -381,7 +413,33 @@ func (s *Service) ListByCandidateWithJobs(ctx context.Context, candidateID strin
 			title = job.Title
 			status = string(job.Status)
 		}
-		out = append(out, &ApplicationWithJob{ATSRecord: rec, JobTitle: title, JobStatus: status})
+		app := &ApplicationWithJob{ATSRecord: rec, JobTitle: title, JobStatus: status}
+		if rec.Status == enums.ATSInterview && s.interviewRepo != nil {
+			interviews, _ := s.interviewRepo.ListByATSID(ctx, rec.ID)
+			if len(interviews) > 0 {
+				i := interviews[0]
+				app.Interview = &InterviewSummary{
+					ID:          i.ID,
+					ScheduledAt: i.ScheduledAt,
+					DurationMin: i.Duration,
+					Location:    i.Location,
+					Round:       i.Round,
+					Status:      i.Status,
+				}
+			}
+		}
+		if s.offerRepo != nil {
+			offer, _ := s.offerRepo.GetByATSID(ctx, rec.ID)
+			if offer != nil {
+				app.Offer = &OfferSummary{
+					ID:       offer.ID,
+					Status:   offer.Status,
+					Amount:   offer.Amount,
+					Currency: offer.Currency,
+				}
+			}
+		}
+		out = append(out, app)
 	}
 	return out, nil
 }
@@ -557,6 +615,15 @@ func (s *Service) GetApplicationByIDEnriched(ctx context.Context, id string) (*A
 		detail.SemanticMatches = rec.SemanticMatches
 	}
 	detail.Qualified = rec.Qualified
+	if s.offerRepo != nil {
+		offer, _ := s.offerRepo.GetByATSID(ctx, rec.ID)
+		if offer != nil {
+			detail.OfferID = offer.ID
+			detail.OfferStatus = offer.Status
+			detail.OfferAmount = offer.Amount
+			detail.OfferCurrency = offer.Currency
+		}
+	}
 	return detail, nil
 }
 

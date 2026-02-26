@@ -104,7 +104,7 @@ func main() {
 	candidateHandler := candidates.NewHandler(candidateSvc, resumeUploader)
 
 	notifSvc := notifications.NewServiceWithSMTP(&cfg.SMTP)
-	atsSvc := ats.NewServiceWithResolver(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, atsAIClient, cfg.AI.Enabled, atsResumeURLResolver)
+	atsSvc := ats.NewServiceWithResolver(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, interviewRepo, offerRepo, atsAIClient, cfg.AI.Enabled, atsResumeURLResolver)
 	atsSvc.SetNotifier(notifSvc)
 	atsHandler := ats.NewHandler(atsSvc)
 

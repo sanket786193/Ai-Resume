@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"resume/internal/domain/entities"
+	"resume/internal/middleware"
 	"resume/internal/server/response"
 
 	"github.com/gin-gonic/gin"
@@ -69,9 +71,21 @@ func (h *Handler) Reject(c *gin.Context) {
 	response.JSON(c, http.StatusOK, gin.H{"message": "rejected"})
 }
 
-// List returns all offers for HR. Placeholder: returns empty list until ListForHR is implemented.
+// List returns all offers for HR (offers for jobs created by the authenticated HR user).
 func (h *Handler) List(c *gin.Context) {
-	response.JSON(c, http.StatusOK, []interface{}{})
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return
+	}
+	list, err := h.svc.ListForHR(c.Request.Context(), claims.UserID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if list == nil {
+		list = []*entities.Offer{}
+	}
+	response.JSON(c, http.StatusOK, list)
 }
 
 // GetByID returns an offer by ID (HR).

@@ -175,12 +175,27 @@ export function ApplicantApplicationPage() {
           <DetailRow label="Applied" value={appliedAt} />
           <DetailRow label="Job" value={detail.job_title} />
         </div>
-        <div className="flex flex-wrap gap-2 pt-4 border-t border-border/50">
+        <div className="pt-4 border-t border-border/50 space-y-3">
+          {(detail.offer_id ?? detail.offerId) ? (
+            <div className="rounded-lg bg-muted/40 p-3 text-sm">
+              <p className="font-medium text-foreground">Offer (candidate selected)</p>
+              <p className="text-muted-foreground mt-1">
+                {(detail.offer_amount ?? detail.offerAmount) && (detail.offer_currency ?? detail.offerCurrency)
+                  ? `${detail.offer_amount ?? detail.offerAmount} ${detail.offer_currency ?? detail.offerCurrency}`
+                  : 'Offer issued'}
+                {' — '}
+                <span className="capitalize">{detail.offer_status ?? detail.offerStatus ?? '—'}</span>
+              </p>
+            </div>
+          ) : (
+            (detail.status === 'SHORTLISTED' || detail.status === 'INTERVIEW') && (
+              <Button variant="outline" size="sm" onClick={() => setOfferOpen(true)}>
+                Issue offer
+              </Button>
+            )
+          )}
           <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)}>
             Schedule interview
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setOfferOpen(true)}>
-            Issue offer
           </Button>
         </div>
       </CardContent>

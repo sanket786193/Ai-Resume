@@ -18,12 +18,27 @@ export function HrOffersPage() {
       )}
       {!isPending && !isError && list.length > 0 && (
         <ul className="space-y-2">
-          {list.map((o) => (
-            <li key={o.id} className="border rounded-lg p-4">
-              <p className="font-medium">{o.candidateName ?? o.title}</p>
-              <p className="text-sm text-muted-foreground">{o.status ?? o.createdAt}</p>
-            </li>
-          ))}
+          {list.map((o) => {
+            const id = o.id ?? o.ID
+            const amount = o.amount ?? o.Amount
+            const currency = o.currency ?? o.Currency
+            const status = o.status ?? o.Status
+            const createdAt = o.created_at ?? o.CreatedAt
+            return (
+              <li key={id} className="border rounded-lg p-4">
+                <p className="font-medium">
+                  {amount && currency ? `${amount} ${currency}` : 'Offer'}
+                  {' — '}
+                  <span className="capitalize">{status ?? '—'}</span>
+                </p>
+                {createdAt && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Created {new Date(createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                  </p>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

@@ -142,3 +142,20 @@ func (s *Service) GetByIDForCandidate(ctx context.Context, offerID, candidateID 
 	}
 	return offer, nil
 }
+
+// ListForHR returns all offers for jobs created by the HR user (so offer is shown when candidate selected on both sides).
+func (s *Service) ListForHR(ctx context.Context, hrUserID string) ([]*entities.Offer, error) {
+	jobIDs, err := s.jobRepo.ListIDsByCreatedBy(ctx, hrUserID)
+	if err != nil || len(jobIDs) == 0 {
+		return nil, err
+	}
+	recs, err := s.atsRepo.ListByJobIDs(ctx, jobIDs, nil, 500, 0)
+	if err != nil || len(recs) == 0 {
+		return nil, err
+	}
+	atsIDs := make([]string, 0, len(recs))
+	for _, r := range recs {
+		atsIDs = append(atsIDs, r.ID)
+	}
+	return s.offerRepo.ListByATSIDs(ctx, atsIDs)
+}
