@@ -1,72 +1,88 @@
 /**
- * API service. All backend calls live here. No React, no hooks.
+ * API service. All backend calls go through here. Aligned with Go API routes.
  */
 import { http } from './http'
 
 // ---------- Auth ----------
 export const authApi = {
   login: (payload) => http.post('/auth/login', payload),
-  register: (payload) => http.post('/auth/register', payload),
+  registerCandidate: (payload) => http.post('/auth/register/candidate', payload),
+  registerHR: (payload) => http.post('/auth/register/hr', payload),
   me: () => http.get('/auth/me'),
-  logout: () => http.post('/auth/logout'),
+  refresh: (payload) => http.post('/auth/refresh', payload),
+  logout: (payload) => http.post('/auth/logout', payload ?? {}),
 }
 
-// ---------- Jobs ----------
+// ---------- Jobs (public: list/detail; HR: list/create/update/delete/close/applications) ----------
 export const jobsApi = {
   list: (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : ''
     return http.get(`/jobs${q}`)
   },
+  listForHR: (params) => {
+    const q = params ? `?${new URLSearchParams(params)}` : ''
+    return http.get(`/api/hr/jobs${q}`)
+  },
   getById: (id) => http.get(`/jobs/${id}`),
-  create: (payload) => http.post('/jobs', payload),
-  update: (id, payload) => http.patch(`/jobs/${id}`, payload),
-  close: (id) => http.patch(`/jobs/${id}/close`),
-  getApplicants: (jobId) => http.get(`/jobs/${jobId}/applicants`),
+  create: (payload) => http.post('/api/hr/jobs', payload),
+  update: (id, payload) => http.put(`/api/hr/jobs/${id}`, payload),
+  publish: (id) => http.post(`/api/hr/jobs/${id}/publish`),
+  close: (id) => http.post(`/api/hr/jobs/${id}/close`),
+  delete: (id) => http.delete(`/api/hr/jobs/${id}`),
+  getApplicants: (jobId) => http.get(`/api/hr/jobs/${jobId}/applications`),
+  bulkApply: (jobId, payload) => http.post(`/api/hr/jobs/${jobId}/bulk-apply`, payload),
 }
 
-// ---------- Candidates (ATS) ----------
+// ---------- Candidates / ATS (HR: applications list and status) ----------
 export const candidatesApi = {
   list: (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : ''
-    return http.get(`/candidates${q}`)
+    return http.get(`/api/hr/applications${q}`)
   },
-  getById: (id) => http.get(`/candidates/${id}`),
-  updateStatus: (id, status) => http.patch(`/candidates/${id}/status`, { status }),
-  getByJob: (jobId) => http.get(`/jobs/${jobId}/applicants`),
+  getById: (id) => http.get(`/api/hr/applications/${id}`),
+  getByJob: (jobId) => http.get(`/api/hr/jobs/${jobId}/applications`),
+  updateStatus: (id, status) => http.put(`/api/hr/applications/${id}/status`, { status }),
 }
 
-// ---------- Applications (candidate-facing) ----------
+// ---------- Applications (candidate-facing; requires candidate_id from auth) ----------
 export const applicationsApi = {
-  apply: (jobId, payload) => {
-    if (payload?.resume instanceof File) {
-      const form = new FormData()
-      form.append('name', payload.name ?? '')
-      form.append('email', payload.email ?? '')
-      form.append('resume', payload.resume)
-      return http.postForm(`/jobs/${jobId}/apply`, form)
-    }
-    return http.post(`/jobs/${jobId}/apply`, { name: payload.name, email: payload.email })
-  },
-  myApplications: () => http.get('/candidate/applications'),
+  myApplications: (candidateId) => http.get(`/api/candidates/${candidateId}/applications`),
+  apply: (candidateId, payload) => http.post(`/api/candidates/${candidateId}/applications`, { job_id: payload.jobId, resume_id: payload.resumeId }),
+  getApplicationStatus: (candidateId, jobId) => http.get(`/api/candidates/${candidateId}/applications/${jobId}/status`),
+  getApplicationFeedback: (candidateId, jobId) => http.get(`/api/candidates/${candidateId}/applications/${jobId}/feedback`),
 }
 
-// ---------- Interviews ----------
+// ---------- Resumes (candidate-facing) ----------
+export const resumesApi = {
+  list: (candidateId) => http.get(`/api/candidates/${candidateId}/resumes`),
+  upload: (candidateId, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return http.postForm(`/api/candidates/${candidateId}/resumes/upload`, fd)
+  },
+}
+
+// ---------- Interviews (HR + candidate confirm) ----------
 export const interviewsApi = {
   list: (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : ''
-    return http.get(`/interviews${q}`)
+    return http.get(`/api/hr/interviews${q}`)
   },
-  create: (payload) => http.post('/interviews', payload),
-  update: (id, payload) => http.patch(`/interviews/${id}`, payload),
+  getById: (id) => http.get(`/api/hr/interviews/${id}`),
+  create: (payload) => http.post('/api/hr/interviews', payload),
+  update: (id, payload) => http.put(`/api/hr/interviews/${id}`, payload),
+  confirmByCandidate: (candidateId, interviewId) => http.post(`/api/candidates/${candidateId}/interviews/${interviewId}/confirm`),
 }
 
-// ---------- Offers ----------
+// ---------- Offers (HR create; candidate accept/reject) ----------
 export const offersApi = {
   list: (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : ''
-    return http.get(`/offers${q}`)
+    return http.get(`/api/hr/offers${q}`)
   },
-  create: (payload) => http.post('/offers', payload),
-  sendSelection: (candidateId) => http.post(`/candidates/${candidateId}/select`),
-  sendRejection: (candidateId) => http.post(`/candidates/${candidateId}/reject`),
+  getById: (id) => http.get(`/api/hr/offers/${id}`),
+  create: (payload) => http.post('/api/hr/offers', payload),
+  getByIdForCandidate: (candidateId, offerId) => http.get(`/api/candidates/${candidateId}/offers/${offerId}`),
+  accept: (candidateId, offerId) => http.post(`/api/candidates/${candidateId}/offers/${offerId}/accept`),
+  reject: (candidateId, offerId) => http.post(`/api/candidates/${candidateId}/offers/${offerId}/reject`),
 }

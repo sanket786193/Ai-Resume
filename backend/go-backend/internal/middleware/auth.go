@@ -1,43 +1,73 @@
 package middleware
 
 import (
-	"net/http"
 	"strings"
 
-	"resume/internal/service/auth"
+	"resume/internal/auth"
+	domainerrors "resume/internal/domain/errors"
+	"resume/internal/server/response"
 
-	"github.com/labstack/echo/v4"
+	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware validates JWT tokens and sets user claims in context
-func AuthMiddleware(authService *auth.Service) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"error": "Authorization header is required",
-				})
+// Auth validates JWT and sets claims in context.
+// Token can be in Authorization header (Bearer) or in query param "access_token" (e.g. for iframe PDF viewer).
+func Auth(svc *auth.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := ""
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
 			}
-
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"error": "Invalid authorization header format. Expected: Bearer <token>",
-				})
-			}
-
-			token := parts[1]
-			claims, err := authService.ValidateToken(token)
-			if err != nil {
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"error": "Invalid or expired token",
-				})
-			}
-
-			// Set user claims in context for use in handlers
-			c.Set("user", claims)
-			return next(c)
 		}
+		if token == "" {
+			token = c.Query("access_token")
+		}
+		if token == "" {
+			response.Error(c, &domainerrors.UnauthorizedError{Message: "Authorization header or access_token required"})
+			c.Abort()
+			return
+		}
+		claims, err := svc.ValidateToken(token)
+		if err != nil {
+			response.Error(c, &domainerrors.UnauthorizedError{Message: "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+		c.Set(auth.ContextKeyClaims, claims)
+		c.Next()
+	}
+}
+
+// GetClaims returns JWT claims from context (nil if not set).
+func GetClaims(c *gin.Context) *auth.Claims {
+	v, ok := c.Get(auth.ContextKeyClaims)
+	if !ok {
+		return nil
+	}
+	claims, _ := v.(*auth.Claims)
+	return claims
+}
+
+// RequireRole allows only the given roles.
+func RequireRole(roles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		v, ok := c.Get(auth.ContextKeyClaims)
+		if !ok {
+			response.Error(c, &domainerrors.UnauthorizedError{Message: "unauthorized"})
+			c.Abort()
+			return
+		}
+		claims := v.(*auth.Claims)
+		for _, r := range roles {
+			if claims.Role == r {
+				c.Next()
+				return
+			}
+		}
+		response.Error(c, &domainerrors.ForbiddenError{Message: "HR role required"})
+		c.Abort()
 	}
 }

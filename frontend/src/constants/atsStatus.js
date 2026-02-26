@@ -30,11 +30,22 @@ export const ATS_KANBAN_STATUSES = [
   ATS_STATUS.REJECTED,
 ]
 
+/** Phase 3: candidate-facing labels (Application Submitted, Under Review, etc.) */
 export const ATS_STATUS_LABEL = {
-  [ATS_STATUS.APPLIED]: 'Applied',
-  [ATS_STATUS.SCREENING]: 'Screening',
+  [ATS_STATUS.APPLIED]: 'Application Submitted',
+  [ATS_STATUS.SCREENING]: 'Under Review',
   [ATS_STATUS.SHORTLISTED]: 'Shortlisted',
-  [ATS_STATUS.INTERVIEW]: 'Interview',
+  [ATS_STATUS.INTERVIEW]: 'Interview Scheduled',
   [ATS_STATUS.REJECTED]: 'Rejected',
-  [ATS_STATUS.HIRED]: 'Hired',
+  [ATS_STATUS.HIRED]: 'Selected',
+}
+
+/** Badge variant per status for candidate/HR UI (default | secondary | outline | destructive) */
+export const ATS_STATUS_BADGE_VARIANT = {
+  [ATS_STATUS.APPLIED]: 'secondary',
+  [ATS_STATUS.SCREENING]: 'default',
+  [ATS_STATUS.SHORTLISTED]: 'default',
+  [ATS_STATUS.INTERVIEW]: 'default',
+  [ATS_STATUS.REJECTED]: 'destructive',
+  [ATS_STATUS.HIRED]: 'default',
 }

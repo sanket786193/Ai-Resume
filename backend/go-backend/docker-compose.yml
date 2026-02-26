@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (pgvector for embeddings)
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: resume-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -23,27 +23,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Database Migration Service
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile.migrate
-    container_name: resume-migrate
-    environment:
-      DB_HOST: postgres
-      DB_PORT: ${DB_PORT:-5432}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_NAME: ${DB_NAME:-resume_db}
-      DB_SSLMODE: disable
-      DB_ENABLED: "true"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - resume-network
-    command: ["./migrate", "-command=up"]
-    restart: "no"
 
   # Go Backend API
   # backend:

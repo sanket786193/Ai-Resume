@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package ats.v1;
+
+option go_package = "resume/internal/pb/ats;ats";
+
+// JobService is implemented by the Go backend; Python AI service can call it for job details.
+service JobService {
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+}
+
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  string location = 4;
+  string department = 5;
+  string status = 6;
+}

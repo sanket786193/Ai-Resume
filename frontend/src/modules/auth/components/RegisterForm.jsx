@@ -105,6 +105,9 @@ export function RegisterForm() {
           <Link to={ROUTES.LOGIN} className="text-sm text-primary underline-offset-4 hover:underline w-full text-center">
             Already have an account? Sign in
           </Link>
+          <Link to={ROUTES.REGISTER_HR} className="text-sm text-muted-foreground hover:underline w-full text-center">
+            Register as HR instead
+          </Link>
         </CardFooter>
       </form>
     </Card>

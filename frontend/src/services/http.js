@@ -8,7 +8,7 @@ export function normalizeApiError(error) {
   if (typeof error === 'string') return { message: error }
   if (error.response) {
     const data = error.response.data
-    const message = data?.message ?? data?.error ?? error.message ?? 'Request failed'
+    const message = data?.error?.message ?? data?.message ?? error.message ?? 'Request failed'
     const status = error.response.status
     return { message, status, data }
   }
@@ -40,11 +40,20 @@ async function request(path, options = {}) {
   const responseData = isJson ? await response.json().catch(() => null) : await response.text().catch(() => null)
 
   if (!response.ok) {
-    const error = new Error(responseData?.message ?? responseData?.error ?? response.statusText)
+    // Go API error shape: { success: false, error: { code, message } }
+    const message = responseData?.error?.message ?? responseData?.message ?? response.statusText
+    const error = new Error(message)
     error.response = { status: response.status, data: responseData }
+    if (response.status === 401) {
+      try { window.localStorage.removeItem('ats_token') } catch {}
+    }
     throw error
   }
 
+  // Go API success shape: { success: true, data: T } — unwrap so callers get T
+  if (responseData && responseData.success === true && 'data' in responseData) {
+    return responseData.data
+  }
   return responseData
 }
 

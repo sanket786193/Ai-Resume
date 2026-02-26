@@ -86,7 +86,10 @@ export function LoginForm() {
             {isSubmitting ? 'Signing in...' : 'Sign in'}
           </Button>
           <Link to={ROUTES.REGISTER} className="text-sm text-primary underline-offset-4 hover:underline w-full text-center">
-            Create account
+            Create account (candidate)
+          </Link>
+          <Link to={ROUTES.REGISTER_HR} className="text-sm text-muted-foreground hover:underline w-full text-center">
+            Register as HR
           </Link>
         </CardFooter>
       </form>

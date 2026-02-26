@@ -7,8 +7,8 @@ function MainLayout() {
   const { user, logout, isPending } = useAuth()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate(ROUTES.LOGIN)
   }
 
@@ -37,20 +37,24 @@ function MainLayout() {
                 <Link to={ROUTES.HR_ATS} className="text-sm text-muted-foreground hover:text-foreground">Pipeline</Link>
                 <Link to={ROUTES.HR_INTERVIEWS} className="text-sm text-muted-foreground hover:text-foreground">Interviews</Link>
                 <Link to={ROUTES.HR_OFFERS} className="text-sm text-muted-foreground hover:text-foreground">Offers</Link>
+                <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
               </>
             )}
             {isCandidate && (
               <>
                 <Link to={ROUTES.PUBLIC_JOBS} className="text-sm text-muted-foreground hover:text-foreground">Jobs</Link>
                 <Link to={ROUTES.CANDIDATE_APPLICATIONS} className="text-sm text-muted-foreground hover:text-foreground">My Applications</Link>
+                <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
               </>
             )}
-            {user ? (
+            {user && !isHr && !isCandidate ? (
               <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
-            ) : (
+            ) : null}
+            {!user && (
               <>
                 <Link to={ROUTES.LOGIN}><Button variant="ghost" size="sm">Login</Button></Link>
-                <Link to={ROUTES.REGISTER}><Button size="sm">Register</Button></Link>
+                <Link to={ROUTES.REGISTER}><Button variant="outline" size="sm">Register</Button></Link>
+                <Link to={ROUTES.REGISTER_HR}><Button size="sm">HR Register</Button></Link>
               </>
             )}
           </nav>

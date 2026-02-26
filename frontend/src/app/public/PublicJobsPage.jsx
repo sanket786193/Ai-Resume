@@ -6,7 +6,7 @@ import { useJobsList } from '@/modules/jobs/hooks/useJobs'
 import { JobCard } from '@/modules/jobs/components/JobCard'
 
 export function PublicJobsPage() {
-  const { data, isPending, isError } = useJobsList({ status: 'OPEN' })
+  const { data, isPending, isError } = useJobsList({ status: 'PUBLISHED' })
   const list = Array.isArray(data) ? data : data?.list ?? []
 
   return (
