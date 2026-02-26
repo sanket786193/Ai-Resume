@@ -2,6 +2,7 @@ package interviews
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"resume/internal/domain/entities"
@@ -10,6 +11,21 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// InterviewForHR is an interview with candidate and job display info for HR list.
+type InterviewForHR struct {
+	ID             string    `json:"id"`
+	ATSID          string    `json:"ats_id"`
+	JobID          string    `json:"job_id"`
+	ScheduledAt    time.Time `json:"scheduled_at"`
+	DurationMin    int       `json:"duration_minutes"`
+	Location       string    `json:"location"`
+	Round          int       `json:"round"`
+	Status         string    `json:"status"`
+	Notes          string    `json:"notes,omitempty"`
+	CandidateName  string    `json:"candidate_name"`
+	JobTitle       string    `json:"job_title"`
+}
 
 // InterviewNotifier sends candidate notification when interview is scheduled (Phase 3). Optional.
 type InterviewNotifier interface {
@@ -117,4 +133,54 @@ func (s *Service) ConfirmForCandidate(ctx context.Context, candidateID, intervie
 		return &domainerrors.ForbiddenError{Message: "interview does not belong to you"}
 	}
 	return s.repo.SetCandidateConfirmedAt(ctx, interviewID, time.Now())
+}
+
+// ListForHR returns all scheduled interviews for jobs created by the HR user, with candidate name and job title.
+func (s *Service) ListForHR(ctx context.Context, hrUserID string) ([]*InterviewForHR, error) {
+	jobIDs, err := s.jobRepo.ListIDsByCreatedBy(ctx, hrUserID)
+	if err != nil || len(jobIDs) == 0 {
+		return nil, err
+	}
+	recs, err := s.atsRepo.ListByJobIDs(ctx, jobIDs, nil, 500, 0)
+	if err != nil || len(recs) == 0 {
+		return nil, err
+	}
+	var out []*InterviewForHR
+	for _, rec := range recs {
+		interviews, err := s.repo.ListByATSID(ctx, rec.ID)
+		if err != nil || len(interviews) == 0 {
+			continue
+		}
+		candidateName := ""
+		if rec.CandidateID != "" {
+			if c, _ := s.candidateRepo.GetByID(ctx, rec.CandidateID); c != nil {
+				if u, _ := s.userRepo.GetByID(ctx, c.UserID); u != nil {
+					candidateName = u.Name
+				}
+			}
+		}
+		jobTitle := ""
+		if rec.JobID != "" {
+			if j, _ := s.jobRepo.GetByID(ctx, rec.JobID); j != nil {
+				jobTitle = j.Title
+			}
+		}
+		for _, i := range interviews {
+			out = append(out, &InterviewForHR{
+				ID:            i.ID,
+				ATSID:         i.ATSID,
+				JobID:         rec.JobID,
+				ScheduledAt:   i.ScheduledAt,
+				DurationMin:   i.Duration,
+				Location:      i.Location,
+				Round:         i.Round,
+				Status:        i.Status,
+				Notes:         i.Notes,
+				CandidateName: candidateName,
+				JobTitle:      jobTitle,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ScheduledAt.After(out[j].ScheduledAt) })
+	return out, nil
 }

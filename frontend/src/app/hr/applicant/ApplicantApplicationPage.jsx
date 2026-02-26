@@ -141,6 +141,9 @@ export function ApplicantApplicationPage() {
   const appliedAt = detail.created_at
     ? new Date(detail.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : null
+  const status = detail.status ?? detail.Status
+  const hasOffer = !!(detail.offer_id ?? detail.offerId)
+  const isSelectedByHR = status === 'SHORTLISTED' || status === 'INTERVIEW'
 
   return (
     <>
@@ -176,7 +179,7 @@ export function ApplicantApplicationPage() {
           <DetailRow label="Job" value={detail.job_title} />
         </div>
         <div className="pt-4 border-t border-border/50 space-y-3">
-          {(detail.offer_id ?? detail.offerId) ? (
+          {hasOffer ? (
             <div className="rounded-lg bg-muted/40 p-3 text-sm">
               <p className="font-medium text-foreground">Offer (candidate selected)</p>
               <p className="text-muted-foreground mt-1">
@@ -187,13 +190,11 @@ export function ApplicantApplicationPage() {
                 <span className="capitalize">{detail.offer_status ?? detail.offerStatus ?? '—'}</span>
               </p>
             </div>
-          ) : (
-            (detail.status === 'SHORTLISTED' || detail.status === 'INTERVIEW') && (
-              <Button variant="outline" size="sm" onClick={() => setOfferOpen(true)}>
-                Issue offer
-              </Button>
-            )
-          )}
+          ) : isSelectedByHR ? (
+            <Button variant="outline" size="sm" onClick={() => setOfferOpen(true)}>
+              Issue offer
+            </Button>
+          ) : null}
           <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)}>
             Schedule interview
           </Button>

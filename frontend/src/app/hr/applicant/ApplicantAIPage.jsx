@@ -91,7 +91,7 @@ export function ApplicantAIPage() {
             {detail.skill_match_score != null && detail.skill_match_pct == null && (
               <div className="rounded-lg border border-border/50 bg-muted/30 px-4 py-2 min-w-[7rem]">
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Match score</span>
-                <p className="text-lg font-semibold mt-0.5">{Number(detail.skill_match_score).toFixed(2)}</p>
+                <p className="text-lg font-semibold mt-0.5">{Math.round(Number(detail.skill_match_score) * 100)}/100</p>
               </div>
             )}
           </div>
@@ -105,6 +105,16 @@ export function ApplicantAIPage() {
                 {detail.qualified ? 'Yes' : 'No'}
               </Badge>
             </div>
+          </div>
+        )}
+
+        {/* Candidate resume summary (detailed) */}
+        {detail.ai_summary && detail.ai_summary !== '' && (
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-2">Candidate resume summary</h3>
+            <p className="text-base leading-relaxed whitespace-pre-wrap text-foreground">
+              {detail.ai_summary}
+            </p>
           </div>
         )}
 
@@ -173,14 +183,6 @@ export function ApplicantAIPage() {
           </div>
         )}
 
-        {detail.ai_summary && detail.ai_summary !== '' && (
-          <div>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Summary</span>
-            <p className="text-sm mt-1 whitespace-pre-wrap rounded-md bg-muted/30 p-3 border border-border/50">
-              {detail.ai_summary}
-            </p>
-          </div>
-        )}
       </CardContent>
     </Card>
   )

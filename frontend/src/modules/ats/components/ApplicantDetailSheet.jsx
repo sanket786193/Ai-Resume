@@ -180,7 +180,7 @@ export function ApplicantDetailSheet({ open, onOpenChange, applicationId, jobId 
                         {detail.skill_match_score != null && detail.skill_match_pct == null && (
                           <div>
                             <span className="text-xs text-muted-foreground">Match score</span>
-                            <p className="text-sm font-medium">{Number(detail.skill_match_score).toFixed(2)}</p>
+                            <p className="text-sm font-medium">{Math.round(Number(detail.skill_match_score) * 100)}/100</p>
                           </div>
                         )}
                       </div>
@@ -190,8 +190,8 @@ export function ApplicantDetailSheet({ open, onOpenChange, applicationId, jobId 
                     )}
                     {detail.ai_summary && detail.ai_summary !== '' && (
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-xs text-muted-foreground">Summary</span>
-                        <p className="text-sm whitespace-pre-wrap">{detail.ai_summary}</p>
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Candidate resume summary</span>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{detail.ai_summary}</p>
                       </div>
                     )}
                     {detail.experience_match && detail.experience_match !== '' && (

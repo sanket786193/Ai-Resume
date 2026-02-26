@@ -107,7 +107,7 @@ class ScreeningService:
             "experience_match (short string, e.g. Good/Fair/Low), experience_warnings (array of strings: specific experience mismatches, e.g. 'Years in X below requirement'), "
             "keyword_matches (array of job skills/terms that appear verbatim or near-verbatim in the resume), "
             "semantic_matches (array of job skills/requirements that are satisfied by resume meaning even if different words used), "
-            "summary (2-3 sentences), qualified (boolean)."
+            "summary (detailed candidate resume summary: 3-5 sentences covering the candidate's key experience, main skills, and how they fit the role; be specific and informative), qualified (boolean)."
         )
         prompt = (
             f"Resume excerpt:\n{resume_text[:4000]}\n\nJob description:\n{job_text[:2500]}\n\n{sim_note}\n\n"

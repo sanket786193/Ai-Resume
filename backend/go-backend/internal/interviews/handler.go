@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"resume/internal/middleware"
 	"resume/internal/server/response"
 
 	"github.com/gin-gonic/gin"
@@ -49,9 +50,21 @@ func (h *Handler) Schedule(c *gin.Context) {
 	response.JSON(c, http.StatusCreated, interview)
 }
 
-// List returns all interviews for HR (optional ats_id query). Placeholder: returns empty list until ListForHR is implemented.
+// List returns all scheduled interviews for HR (jobs created by the authenticated HR user).
 func (h *Handler) List(c *gin.Context) {
-	response.JSON(c, http.StatusOK, []interface{}{})
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return
+	}
+	list, err := h.svc.ListForHR(c.Request.Context(), claims.UserID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if list == nil {
+		list = []*InterviewForHR{}
+	}
+	response.JSON(c, http.StatusOK, list)
 }
 
 // GetByID returns an interview by ID.
