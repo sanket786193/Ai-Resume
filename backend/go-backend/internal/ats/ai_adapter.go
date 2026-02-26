@@ -12,8 +12,8 @@ type aiAdapter struct {
 }
 
 // ScreenResume calls the AI service and converts response to AIScreenResult.
-func (a *aiAdapter) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string) (*AIScreenResult, error) {
-	resp, err := a.client.ScreenResume(ctx, resumeContentOrPath, jobDescription)
+func (a *aiAdapter) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string, jobRequirements *client.JobRequirements) (*AIScreenResult, error) {
+	resp, err := a.client.ScreenResume(ctx, resumeContentOrPath, jobDescription, jobRequirements)
 	if err != nil {
 		return nil, err
 	}

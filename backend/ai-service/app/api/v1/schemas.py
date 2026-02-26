@@ -4,12 +4,21 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+class JobRequirements(BaseModel):
+    """Optional job requirements for matching (Phase 2)."""
+
+    skills: Optional[List[str]] = Field(None, description="Required skills")
+    experience_level: Optional[str] = Field(None, description="FRESHER, EXPERIENCED, or ANY")
+    qualification: Optional[str] = Field(None, description="Required qualification e.g. B.Tech")
+
+
 class ScreenRequest(BaseModel):
     """POST /screen body - aligned with Go internal/ai/client."""
 
     resume_path_or_content: str = Field(..., description="Resume text or path")
     job_description: str = Field(..., description="Job description text")
     vector_similarity: Optional[float] = Field(None, description="Optional cosine similarity for context")
+    job_requirements: Optional[JobRequirements] = Field(None, description="Optional skills, experience_level, qualification for matching")
 
 
 class ScreenResponse(BaseModel):

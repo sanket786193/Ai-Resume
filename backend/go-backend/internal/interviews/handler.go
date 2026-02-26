@@ -122,3 +122,14 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 	response.JSON(c, http.StatusOK, interview)
 }
+
+// ConfirmByCandidate records that the candidate confirmed the interview (Phase 3). Route: POST /api/candidates/:candidate_id/interviews/:id/confirm
+func (h *Handler) ConfirmByCandidate(c *gin.Context) {
+	candidateID := c.Param("candidate_id")
+	interviewID := c.Param("id")
+	if err := h.svc.ConfirmForCandidate(c.Request.Context(), candidateID, interviewID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.JSON(c, http.StatusOK, gin.H{"message": "confirmed"})
+}

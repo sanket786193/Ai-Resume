@@ -22,7 +22,7 @@ router = APIRouter()
 def _normalize_resume_url(url: str) -> str:
     """
     Normalize URL path so path segments are properly percent-encoded.
-    Supabase Storage (and some CDNs) can return 400 for paths with unencoded
+    Cloudinary (and some CDNs) can return 400 for paths with unencoded
     spaces or parentheses; encoding the path often fixes the request.
     """
     try:

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { jobsApi } from '@/services/api'
+import { ATS_PIPELINE_QUERY_KEY } from '@/modules/ats/hooks/useAtsPipeline'
 
 export const JOBS_QUERY_KEY = ['jobs']
 export const HR_JOBS_QUERY_KEY = ['jobs', 'hr']
@@ -92,6 +93,18 @@ export function useDeleteJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
       queryClient.invalidateQueries({ queryKey: HR_JOBS_QUERY_KEY })
+    },
+  })
+}
+
+/** Phase 4: bulk add applicants to a job (HR). */
+export function useBulkApply(jobId) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload) => jobsApi.bulkApply(jobId, payload),
+    onSuccess: (_, __, context) => {
+      queryClient.invalidateQueries({ queryKey: JOB_APPLICANTS_QUERY_KEY(jobId) })
+      queryClient.invalidateQueries({ queryKey: ATS_PIPELINE_QUERY_KEY })
     },
   })
 }

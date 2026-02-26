@@ -6,6 +6,8 @@ import (
 
 	"resume/internal/domain/entities"
 	"resume/internal/domain/enums"
+
+	"github.com/lib/pq"
 )
 
 // JobRepo persists jobs.
@@ -20,27 +22,38 @@ func NewJobRepo(db *sql.DB) *JobRepo {
 
 // Create inserts a job.
 func (r *JobRepo) Create(ctx context.Context, j *entities.Job) error {
-	query := `INSERT INTO jobs (id, title, description, location, department, status, created_by, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	query := `INSERT INTO jobs (id, title, description, location, department, status, experience_level, qualification, skills, vacancy_limits, created_by, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+	expLevel := string(j.ExperienceLevel)
+	if expLevel == "" {
+		expLevel = string(enums.ExperienceAny)
+	}
 	_, err := r.db.ExecContext(ctx, query,
 		j.ID, j.Title, j.Description, j.Location, j.Department,
-		string(j.Status), j.CreatedBy, j.CreatedAt, j.UpdatedAt)
+		string(j.Status), expLevel, j.Qualification, pq.Array(j.Skills), j.VacancyLimits,
+		j.CreatedBy, j.CreatedAt, j.UpdatedAt)
 	return err
 }
 
 // GetByID returns a job by ID (excluding soft-deleted).
 func (r *JobRepo) GetByID(ctx context.Context, id string) (*entities.Job, error) {
-	query := `SELECT id, title, description, location, department, status, created_by, created_at, updated_at
+	query := `SELECT id, title, description, location, department, status, experience_level, qualification, skills, vacancy_limits, created_by, created_at, updated_at
 	          FROM jobs WHERE id = $1 AND deleted_at IS NULL`
 	var j entities.Job
-	var status string
+	var status, expLevel string
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&j.ID, &j.Title, &j.Description, &j.Location, &j.Department,
-		&status, &j.CreatedBy, &j.CreatedAt, &j.UpdatedAt)
+		&status, &expLevel, &j.Qualification, pq.Array(&j.Skills), &j.VacancyLimits,
+		&j.CreatedBy, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	j.Status = enums.JobStatus(status)
+	if expLevel != "" {
+		j.ExperienceLevel = enums.ExperienceLevel(expLevel)
+	} else {
+		j.ExperienceLevel = enums.ExperienceAny
+	}
 	return &j, nil
 }
 
@@ -68,11 +81,11 @@ func (r *JobRepo) List(ctx context.Context, status *enums.JobStatus, limit, offs
 	var query string
 	var args []interface{}
 	if status != nil {
-		query = `SELECT id, title, description, location, department, status, created_by, created_at, updated_at
+		query = `SELECT id, title, description, location, department, status, experience_level, qualification, skills, vacancy_limits, created_by, created_at, updated_at
 	          FROM jobs WHERE deleted_at IS NULL AND status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 		args = []interface{}{string(*status), limit, offset}
 	} else {
-		query = `SELECT id, title, description, location, department, status, created_by, created_at, updated_at
+		query = `SELECT id, title, description, location, department, status, experience_level, qualification, skills, vacancy_limits, created_by, created_at, updated_at
 	          FROM jobs WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 		args = []interface{}{limit, offset}
 	}
@@ -84,12 +97,18 @@ func (r *JobRepo) List(ctx context.Context, status *enums.JobStatus, limit, offs
 	var list []*entities.Job
 	for rows.Next() {
 		var j entities.Job
-		var statusStr string
+		var statusStr, expLevel string
 		if err := rows.Scan(&j.ID, &j.Title, &j.Description, &j.Location, &j.Department,
-			&statusStr, &j.CreatedBy, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			&statusStr, &expLevel, &j.Qualification, pq.Array(&j.Skills), &j.VacancyLimits,
+			&j.CreatedBy, &j.CreatedAt, &j.UpdatedAt); err != nil {
 			return nil, err
 		}
 		j.Status = enums.JobStatus(statusStr)
+		if expLevel != "" {
+			j.ExperienceLevel = enums.ExperienceLevel(expLevel)
+		} else {
+			j.ExperienceLevel = enums.ExperienceAny
+		}
 		list = append(list, &j)
 	}
 	return list, rows.Err()
@@ -103,12 +122,18 @@ func (r *JobRepo) UpdateStatus(ctx context.Context, id string, status enums.JobS
 	return err
 }
 
-// Update updates job fields (title, description, location, department, status).
+// Update updates job fields (title, description, location, department, status, requirements, vacancy_limits).
 func (r *JobRepo) Update(ctx context.Context, j *entities.Job) error {
+	expLevel := string(j.ExperienceLevel)
+	if expLevel == "" {
+		expLevel = string(enums.ExperienceAny)
+	}
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE jobs SET title = $1, description = $2, location = $3, department = $4, status = $5, updated_at = $6
-		 WHERE id = $7 AND deleted_at IS NULL`,
-		j.Title, j.Description, j.Location, j.Department, string(j.Status), j.UpdatedAt, j.ID)
+		`UPDATE jobs SET title = $1, description = $2, location = $3, department = $4, status = $5,
+		 experience_level = $6, qualification = $7, skills = $8, vacancy_limits = $9, updated_at = $10
+		 WHERE id = $11 AND deleted_at IS NULL`,
+		j.Title, j.Description, j.Location, j.Department, string(j.Status),
+		expLevel, j.Qualification, pq.Array(j.Skills), j.VacancyLimits, j.UpdatedAt, j.ID)
 	return err
 }
 

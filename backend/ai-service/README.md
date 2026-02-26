@@ -5,8 +5,8 @@ Resume screening and ranking for the Go ATS backend. Uses **Google ADK** (Agent 
 ## Contract with Go backend
 
 **HTTP**
-- **POST /screen** – Body: `{ "resume_path_or_content": "...", "job_description": "..." }`  
-  Response: `{ "skill_match_score": 0.0–1.0, "ranking_score": 0.0–1.0, "qualified": true|false }`
+- **POST /screen** – Body: `{ "resume_path_or_content": "...", "job_description": "...", "job_requirements": { "skills": ["Golang", "Python"], "experience_level": "EXPERIENCED", "qualification": "B.Tech" } }` (job_requirements optional).  
+  Response: `{ "skill_match_score": 0.0–1.0, "ranking_score": 0.0–1.0, "qualified": true|false, ... }`. When job_requirements is provided, matching uses required skills, experience level, and qualification.
 - **GET /health** – `{ "status": "ok" }`
 - **GET /health/ready** – `{ "status": "ok", "ollama_available": true|false }`
 

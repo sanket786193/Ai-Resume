@@ -16,10 +16,18 @@ type Client struct {
 	enabled    bool
 }
 
+// JobRequirements is optional context for matching (Phase 2).
+type JobRequirements struct {
+	Skills          []string `json:"skills,omitempty"`
+	ExperienceLevel string   `json:"experience_level,omitempty"`
+	Qualification   string   `json:"qualification,omitempty"`
+}
+
 // ScreenRequest is sent to the AI service.
 type ScreenRequest struct {
-	ResumePathOrContent string `json:"resume_path_or_content"`
-	JobDescription     string `json:"job_description"`
+	ResumePathOrContent string           `json:"resume_path_or_content"`
+	JobDescription     string           `json:"job_description"`
+	JobRequirements    *JobRequirements `json:"job_requirements,omitempty"`
 }
 
 // ScreenResponse is returned by the AI service (full ATS evaluation).
@@ -95,13 +103,15 @@ func (c *Client) Parse(ctx context.Context, resumePathOrContent string) (*ParseR
 }
 
 // ScreenResume calls the Python service for resume screening; implements ats.AIClient.
-func (c *Client) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string) (*ScreenResponse, error) {
+// jobRequirements is optional; when set, the AI service uses it for skill/experience/qualification matching.
+func (c *Client) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string, jobRequirements *JobRequirements) (*ScreenResponse, error) {
 	if !c.enabled {
 		return &ScreenResponse{}, nil
 	}
 	reqBody := ScreenRequest{
 		ResumePathOrContent: resumeContentOrPath,
 		JobDescription:     jobDescription,
+		JobRequirements:    jobRequirements,
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {

@@ -77,7 +77,9 @@ func NewRouter(cfg Config) *gin.Engine {
 		hr.DELETE("/jobs/:id", cfg.JobsHandler.Delete)
 		hr.GET("/applications", cfg.ATSHandler.ListForHR)         // all HR's applications (optional ?job_id=)
 		hr.GET("/applications/:id", cfg.ATSHandler.GetApplicationByID) // single application detail
+		hr.GET("/applications/:id/resume", cfg.ATSHandler.GetApplicationResume) // resume PDF (proxied for iframe)
 		hr.GET("/jobs/:id/applications", cfg.ATSHandler.ListByJob) // id = job_id
+		hr.POST("/jobs/:id/bulk-apply", cfg.ATSHandler.BulkApply)  // Phase 4: bulk add applicants
 		hr.PUT("/applications/:id/status", cfg.ATSHandler.UpdateStatus)
 		hr.GET("/interviews", cfg.InterviewsHandler.List)
 		hr.POST("/interviews", cfg.InterviewsHandler.Schedule)
@@ -101,7 +103,10 @@ func NewRouter(cfg Config) *gin.Engine {
 		candidate.GET("/resumes/:resume_id", cfg.CandidatesHandler.GetResume)
 		candidate.POST("/applications", cfg.ATSHandler.Apply)
 		candidate.GET("/applications", cfg.ATSHandler.ListMyApplications)
-		candidate.GET("/applications/:job_id/status", cfg.ATSHandler.GetApplicationStatus) // candidate_id from path
+		candidate.GET("/applications/:job_id/status", cfg.ATSHandler.GetApplicationStatus)   // candidate_id from path
+		candidate.GET("/applications/:job_id/feedback", cfg.ATSHandler.GetApplicationFeedback) // AI feedback (safe subset)
+		candidate.POST("/interviews/:id/confirm", cfg.InterviewsHandler.ConfirmByCandidate)   // confirm interview (Phase 3)
+		candidate.GET("/offers/:id", cfg.OffersHandler.GetByIDForCandidate)                  // view offer / download letter (Phase 3)
 		candidate.POST("/offers/:id/accept", cfg.OffersHandler.Accept)
 		candidate.POST("/offers/:id/reject", cfg.OffersHandler.Reject)
 	}

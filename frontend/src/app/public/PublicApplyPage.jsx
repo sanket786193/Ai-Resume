@@ -166,7 +166,7 @@ export function PublicApplyPage() {
                     uploadResumeMutation.mutate({ candidateId, file, applyAndRedirect: true })
                   }}
                 />
-                <p className="text-xs text-muted-foreground">PDF only, max 100 MB. Stored in Supabase Storage.</p>
+                <p className="text-xs text-muted-foreground">PDF only, max 100 MB. Stored in Cloudinary.</p>
                 {uploadResumeMutation.isPending && (
                   <p className="text-sm text-muted-foreground">Uploading…</p>
                 )}

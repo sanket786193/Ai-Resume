@@ -6,6 +6,7 @@ import (
 
 	"resume/internal/domain/entities"
 	domainerrors "resume/internal/domain/errors"
+	"resume/internal/domain/enums"
 	"resume/internal/storage/postgres"
 
 	"github.com/google/uuid"
@@ -57,6 +58,7 @@ func (s *Service) AddResume(ctx context.Context, candidateID, fileName, storageP
 		StoragePath: storagePath,
 		FileSize:    fileSize,
 		MimeType:    mimeType,
+		Status:      enums.ResumePending,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

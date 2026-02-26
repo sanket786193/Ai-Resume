@@ -1,6 +1,5 @@
--- Optional: run this only after pgvector is installed (e.g. CREATE EXTENSION vector; as superuser).
--- Not run by goose. Apply manually: psql $DSN -f scripts/optional_pgvector_apply.sql
-
+-- +goose Up
+-- +goose StatementBegin
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS resume_embeddings (
@@ -26,3 +25,10 @@ CREATE TABLE IF NOT EXISTS job_embeddings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_job_embeddings_vector ON job_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 1);
+
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+SELECT 'down SQL query';
+-- +goose StatementEnd

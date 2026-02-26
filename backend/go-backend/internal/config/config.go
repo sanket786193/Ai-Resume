@@ -13,15 +13,26 @@ type Config struct {
 	Database         DatabaseConfig
 	Auth             AuthConfig
 	AI               AIConfig
-	SupabaseStorage  SupabaseStorageConfig
+	CloudinaryStorage CloudinaryStorageConfig
+	SMTP             SMTPConfig
 }
 
-// SupabaseStorageConfig for resume/file uploads via Supabase Storage.
-type SupabaseStorageConfig struct {
-	Enabled        bool
-	URL            string // e.g. https://xxx.supabase.co
-	ServiceRoleKey string
-	Bucket         string // e.g. resumes
+// SMTPConfig for email notifications (e.g. Gmail).
+type SMTPConfig struct {
+	Host     string
+	Port     string
+	Email    string
+	Password string
+	Enabled  bool
+}
+
+// CloudinaryStorageConfig for resume/file uploads via Cloudinary.
+type CloudinaryStorageConfig struct {
+	Enabled    bool
+	CloudName  string
+	APIKey     string
+	APISecret  string
+	Folder     string // e.g. resumes
 }
 
 // DatabaseConfig holds database connection parameters.
@@ -77,11 +88,19 @@ func LoadConfig() *Config {
 			UseGRPC:    getEnv("AI_USE_GRPC", "false") == "true",
 			GRPCTarget: getEnv("AI_GRPC_TARGET", "localhost:50051"),
 		},
-		SupabaseStorage: SupabaseStorageConfig{
-			Enabled:        getEnv("SUPABASE_STORAGE_ENABLED", "false") == "true",
-			URL:            getEnv("SUPABASE_URL", ""),
-			ServiceRoleKey: getEnv("SUPABASE_SERVICE_ROLE_KEY", ""),
-			Bucket:         getEnv("SUPABASE_STORAGE_BUCKET", "resumes"),
+		CloudinaryStorage: CloudinaryStorageConfig{
+			Enabled:   getEnv("CLOUDINARY_ENABLED", "false") == "true",
+			CloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
+			APIKey:    getEnv("CLOUDINARY_API_KEY", ""),
+			APISecret: getEnv("CLOUDINARY_API_SECRET", ""),
+			Folder:    getEnv("CLOUDINARY_FOLDER", "resumes"),
+		},
+		SMTP: SMTPConfig{
+			Host:     getEnv("SMTP_HOST", "smtp.gmail.com"),
+			Port:     getEnv("SMTP_PORT", "587"),
+			Email:    getEnv("SMTP_EMAIL", ""),
+			Password: getEnv("SMTP_PASSWORD", ""),
+			Enabled:  getEnv("AUTO_EMAIL_ENABLED", "false") == "true",
 		},
 	}
 }

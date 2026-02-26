@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -59,15 +60,12 @@ func (c *Client) Upload(ctx context.Context, fileContent []byte, fileName string
 	}
 
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	params := map[string]string{
-		"timestamp": timestamp,
-		"api_key":   c.cfg.APIKey,
-	}
+	// Cloudinary: signature must NOT include api_key (only folder, timestamp, etc.)
+	paramsToSign := map[string]string{"timestamp": timestamp}
 	if c.cfg.UploadFolder != "" {
-		params["folder"] = c.cfg.UploadFolder
+		paramsToSign["folder"] = c.cfg.UploadFolder
 	}
-
-	signature := c.signParams(params)
+	signature := c.signParams(paramsToSign)
 	_ = w.WriteField("timestamp", timestamp)
 	_ = w.WriteField("api_key", c.cfg.APIKey)
 	_ = w.WriteField("signature", signature)
@@ -106,6 +104,17 @@ func (c *Client) Upload(ctx context.Context, fileContent []byte, fileName string
 		return nil, err
 	}
 	return &UploadResult{SecureURL: result.SecureURL, PublicID: result.PublicID}, nil
+}
+
+// PublicURL returns the URL for a stored item. If key is already a full URL, return it; otherwise treat as public_id and build raw URL.
+func (c *Client) PublicURL(key string) string {
+	if key == "" {
+		return ""
+	}
+	if strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
+		return key
+	}
+	return fmt.Sprintf("https://res.cloudinary.com/%s/raw/upload/%s", c.cfg.CloudName, key)
 }
 
 // signParams builds Cloudinary signature: sha1(sorted params string + api_secret).

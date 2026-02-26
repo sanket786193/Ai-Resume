@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional
 
+from app.api.v1.schemas import JobRequirements
 from app.clients.ollama_client import OllamaClient
 from app.config import get_settings
 from app.core.exceptions import OllamaUnavailableError
@@ -42,11 +43,13 @@ class ScreeningService:
         resume_content_or_path: str,
         job_description: str,
         vector_similarity: Optional[float] = None,
+        job_requirements: Optional[JobRequirements] = None,
     ) -> ScreeningResult:
         """
-        Screen resume against job description.
+        Screen resume against job description and optional job requirements.
         - resume_content_or_path: raw text or path (path: read file in production).
         - job_description: job description text.
+        - job_requirements: optional skills, experience_level, qualification for matching.
         Returns scores in [0, 1]; qualified is a recommendation.
         """
         resume_text = resume_content_or_path.strip()
@@ -56,6 +59,16 @@ class ScreeningService:
         job_text = (job_description or "").strip()
         if not job_text:
             job_text = "General role"
+        # Enrich job text with requirements for ADK/Ollama when provided
+        if job_requirements:
+            parts = [job_text]
+            if job_requirements.skills:
+                parts.append("Required skills: " + ", ".join(job_requirements.skills))
+            if job_requirements.experience_level and job_requirements.experience_level != "ANY":
+                parts.append("Experience level: " + job_requirements.experience_level)
+            if job_requirements.qualification:
+                parts.append("Qualification: " + job_requirements.qualification)
+            job_text = "\n\n".join(parts)
 
         # 1) Try Google ADK pipeline (resume -> jd -> nlp -> ats -> skm -> rule-based scoring)
         try:
@@ -79,8 +92,8 @@ class ScreeningService:
         except OllamaUnavailableError:
             logger.warning("Ollama unavailable (timeout or unreachable), using fallback heuristic scoring")
 
-        # 3) Heuristic
-        return self._fallback_heuristic(resume_text, job_text)
+        # 3) Heuristic (use required skills for overlap when provided)
+        return self._fallback_heuristic(resume_text, job_text, job_requirements)
 
     def _screen_with_ollama(
         self, resume_text: str, job_text: str, vector_similarity: Optional[float] = None
@@ -165,13 +178,22 @@ class ScreeningService:
             pass
         return self._fallback_result()
 
-    def _fallback_heuristic(self, resume_text: str, job_text: str) -> ScreeningResult:
-        """Simple keyword overlap when Ollama is not used."""
+    def _fallback_heuristic(
+        self,
+        resume_text: str,
+        job_text: str,
+        job_requirements: Optional[JobRequirements] = None,
+    ) -> ScreeningResult:
+        """Simple keyword overlap when Ollama is not used. Uses required skills when provided."""
         resume_clean = extract_text_from_content(resume_text)
         job_clean = extract_text_from_content(job_text)
         resume_skills = set(s.lower() for s in extract_skills_stub(resume_clean))
-        job_words = set(re.findall(r"[a-zA-Z]{3,}", job_clean.lower()))
+        if job_requirements and job_requirements.skills:
+            job_words = set(s.lower().strip() for s in job_requirements.skills if s and len(s) >= 2)
+        else:
+            job_words = set(re.findall(r"[a-zA-Z]{3,}", job_clean.lower()))
         keyword_matches_list = sorted(resume_skills & job_words)[:30]
+        missing = sorted(job_words - resume_skills)[:20] if job_words else []
         overlap = len(resume_skills & job_words) / max(len(job_words), 1)
         score = min(1.0, overlap * 2.0)
         return ScreeningResult(
@@ -179,6 +201,7 @@ class ScreeningService:
             ranking_score=score * 0.9,
             qualified=score >= 0.3,
             keyword_matches=keyword_matches_list if keyword_matches_list else None,
+            missing_skills=missing if missing else None,
         )
 
     def _fallback_result(self) -> ScreeningResult:

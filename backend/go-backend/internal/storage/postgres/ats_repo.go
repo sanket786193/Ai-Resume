@@ -97,6 +97,15 @@ func (r *ATSRepo) UpdateAIFeedback(ctx context.Context, id string, atsScore, ski
 	return err
 }
 
+// CountByJobIDAndStatus returns the number of ATS records for a job with the given status (for vacancy limit checks).
+func (r *ATSRepo) CountByJobIDAndStatus(ctx context.Context, jobID string, status enums.ATSStatus) (int, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM ats_records WHERE job_id = $1 AND status = $2 AND deleted_at IS NULL`,
+		jobID, string(status)).Scan(&n)
+	return n, err
+}
+
 // ListByJobID returns ATS records for a job with optional status filter.
 func (r *ATSRepo) ListByJobID(ctx context.Context, jobID string, status *enums.ATSStatus, limit, offset int) ([]*entities.ATSRecord, error) {
 	var query string

@@ -17,9 +17,9 @@ Candidate → Resume Upload → Resume Parsing → Structured Data + Embeddings
 
 | Spec | Current | Status |
 |------|---------|--------|
-| Upload resume securely | Go: `UploadResumePDF` (multipart) → Supabase Storage | Done |
+| Upload resume securely | Go: `UploadResumePDF` (multipart) → Cloudinary | Done |
 | Validate file type & size | PDF only, max 100 MB | Done (DOCX not yet) |
-| Store raw file | Supabase Storage; URL in DB | Done |
+| Store raw file | Cloudinary; URL in DB | Done |
 | Table: `resumes` (id, candidate_id, file_url, parsed_status, created_at) | `resumes`: id, candidate_id, file_name, storage_path, file_size, mime_type, created_at | Done (no `parsed_status` column) |
 
 **Gaps:** DOCX support; optional `parsed_status` on `resumes` for UI (e.g. "parsed" / "pending").
@@ -118,7 +118,7 @@ Candidate → Resume Upload → Resume Parsing → Structured Data + Embeddings
 
 | Module | Exists | Missing |
 |--------|--------|--------|
-| 1. Resume upload & storage | Yes (PDF, Supabase) | DOCX; optional parsed_status |
+| 1. Resume upload & storage | Yes (PDF, Cloudinary) | DOCX; optional parsed_status |
 | 2. Resume parsing | Yes (parse + store in resume_parsed_data) | DOCX; certifications |
 | 3. Embedding & vector storage | Embed API only | pgvector tables; store resume/JD embeddings; similarity search |
 | 4. JD analyzer | — | JD normalization; JD embeddings + storage |

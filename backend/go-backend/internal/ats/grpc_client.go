@@ -3,6 +3,7 @@ package ats
 import (
 	"context"
 
+	"resume/internal/ai/client"
 	atspb "resume/proto/ats"
 
 	"google.golang.org/grpc"
@@ -35,8 +36,8 @@ func NewGRPCAIClient(target string, timeoutSec int, enabled bool) (AIClient, err
 	}, nil
 }
 
-// ScreenResume implements AIClient.
-func (c *grpcAIClient) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string) (*AIScreenResult, error) {
+// ScreenResume implements AIClient. jobRequirements is ignored for gRPC until proto is extended.
+func (c *grpcAIClient) ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string, jobRequirements *client.JobRequirements) (*AIScreenResult, error) {
 	if c.client == nil {
 		return &AIScreenResult{}, nil
 	}
@@ -63,7 +64,7 @@ func (c *grpcAIClient) Parse(ctx context.Context, resumePathOrContent string) (r
 // noopAIClient returns empty result when AI is disabled.
 type noopAIClient struct{}
 
-func (noopAIClient) ScreenResume(context.Context, string, string) (*AIScreenResult, error) {
+func (noopAIClient) ScreenResume(context.Context, string, string, *client.JobRequirements) (*AIScreenResult, error) {
 	return &AIScreenResult{}, nil
 }
 

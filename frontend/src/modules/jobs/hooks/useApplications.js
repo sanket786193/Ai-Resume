@@ -3,11 +3,16 @@ import { applicationsApi } from '@/services/api'
 
 export const MY_APPLICATIONS_QUERY_KEY = ['candidate', 'applications']
 
-export function useMyApplications(candidateId) {
+/** Phase 3: refetch every 30s for "real-time" status feel. */
+const APPLICATIONS_REFETCH_MS = 30_000
+
+export function useMyApplications(candidateId, options = {}) {
   return useQuery({
     queryKey: [...MY_APPLICATIONS_QUERY_KEY, candidateId],
     queryFn: () => applicationsApi.myApplications(candidateId),
     enabled: !!candidateId,
+    refetchInterval: options.refetchInterval ?? APPLICATIONS_REFETCH_MS,
+    ...options,
   })
 }
 

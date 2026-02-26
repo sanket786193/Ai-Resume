@@ -30,6 +30,7 @@ export const jobsApi = {
   close: (id) => http.post(`/api/hr/jobs/${id}/close`),
   delete: (id) => http.delete(`/api/hr/jobs/${id}`),
   getApplicants: (jobId) => http.get(`/api/hr/jobs/${jobId}/applications`),
+  bulkApply: (jobId, payload) => http.post(`/api/hr/jobs/${jobId}/bulk-apply`, payload),
 }
 
 // ---------- Candidates / ATS (HR: applications list and status) ----------
@@ -48,6 +49,7 @@ export const applicationsApi = {
   myApplications: (candidateId) => http.get(`/api/candidates/${candidateId}/applications`),
   apply: (candidateId, payload) => http.post(`/api/candidates/${candidateId}/applications`, { job_id: payload.jobId, resume_id: payload.resumeId }),
   getApplicationStatus: (candidateId, jobId) => http.get(`/api/candidates/${candidateId}/applications/${jobId}/status`),
+  getApplicationFeedback: (candidateId, jobId) => http.get(`/api/candidates/${candidateId}/applications/${jobId}/feedback`),
 }
 
 // ---------- Resumes (candidate-facing) ----------
@@ -60,7 +62,7 @@ export const resumesApi = {
   },
 }
 
-// ---------- Interviews (HR) ----------
+// ---------- Interviews (HR + candidate confirm) ----------
 export const interviewsApi = {
   list: (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : ''
@@ -69,6 +71,7 @@ export const interviewsApi = {
   getById: (id) => http.get(`/api/hr/interviews/${id}`),
   create: (payload) => http.post('/api/hr/interviews', payload),
   update: (id, payload) => http.put(`/api/hr/interviews/${id}`, payload),
+  confirmByCandidate: (candidateId, interviewId) => http.post(`/api/candidates/${candidateId}/interviews/${interviewId}/confirm`),
 }
 
 // ---------- Offers (HR create; candidate accept/reject) ----------
@@ -79,6 +82,7 @@ export const offersApi = {
   },
   getById: (id) => http.get(`/api/hr/offers/${id}`),
   create: (payload) => http.post('/api/hr/offers', payload),
+  getByIdForCandidate: (candidateId, offerId) => http.get(`/api/candidates/${candidateId}/offers/${offerId}`),
   accept: (candidateId, offerId) => http.post(`/api/candidates/${candidateId}/offers/${offerId}/accept`),
   reject: (candidateId, offerId) => http.post(`/api/candidates/${candidateId}/offers/${offerId}/reject`),
 }

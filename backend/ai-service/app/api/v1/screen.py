@@ -20,7 +20,7 @@ def screen_resume(req: ScreenRequest) -> ScreenResponse:
     """
     Screen resume against job description. Returns full ATS evaluation:
     ats_score (0-100), skill_match_pct, missing_skills, experience_match, summary, model_version.
-    If resume_path_or_content is a URL (e.g. Supabase), fetches and extracts PDF text first.
+    If resume_path_or_content is a URL (e.g. Cloudinary), fetches and extracts PDF text first.
     """
     resume_input = (req.resume_path_or_content or "").strip()
     if resume_input.startswith(("http://", "https://")):
@@ -30,6 +30,7 @@ def screen_resume(req: ScreenRequest) -> ScreenResponse:
             resume_content_or_path=resume_input,
             job_description=req.job_description,
             vector_similarity=req.vector_similarity,
+            job_requirements=req.job_requirements,
         )
         return ScreenResponse(
             skill_match_score=result.skill_match_score,

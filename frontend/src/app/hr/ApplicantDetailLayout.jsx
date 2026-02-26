@@ -95,7 +95,7 @@ export function ApplicantDetailLayout() {
 
   if (isError) {
     return (
-      <div className="max-w-4xl">
+      <div className="max-w-10xl">
         <p className="text-sm text-destructive">Failed to load applicant details. Please try again.</p>
         <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate(backHref)}>
           Back to applicants
@@ -113,7 +113,7 @@ export function ApplicantDetailLayout() {
     )
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <PageHeader
           title={isPending ? <Skeleton className="h-8 w-48" /> : name}

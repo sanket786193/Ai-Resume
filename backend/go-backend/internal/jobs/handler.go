@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"resume/internal/domain/entities"
 	"resume/internal/domain/enums"
 	"resume/internal/middleware"
 	"resume/internal/server/response"
@@ -23,18 +24,26 @@ func NewHandler(svc *Service) *Handler {
 
 // CreateJobRequest body.
 type CreateJobRequest struct {
-	Title       string `json:"title" binding:"required"`
-	Description string `json:"description" binding:"required"`
-	Location    string `json:"location"`
-	Department  string `json:"department"`
+	Title           string                 `json:"title" binding:"required"`
+	Description     string                 `json:"description" binding:"required"`
+	Location        string                 `json:"location"`
+	Department      string                 `json:"department"`
+	ExperienceLevel string                 `json:"experience_level"`
+	Qualification   string                 `json:"qualification"`
+	Skills          []string               `json:"skills"`
+	VacancyLimits   []entities.RoleVacancy `json:"vacancy_limits"`
 }
 
 // UpdateJobRequest body.
 type UpdateJobRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Location    string `json:"location"`
-	Department  string `json:"department"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	Location        string                 `json:"location"`
+	Department      string                 `json:"department"`
+	ExperienceLevel string                 `json:"experience_level"`
+	Qualification   string                 `json:"qualification"`
+	Skills          []string               `json:"skills"`
+	VacancyLimits   []entities.RoleVacancy `json:"vacancy_limits"`
 }
 
 // Create creates a job (HR).
@@ -48,7 +57,20 @@ func (h *Handler) Create(c *gin.Context) {
 		response.ValidationError(c, err)
 		return
 	}
-	job, err := h.svc.Create(c.Request.Context(), req.Title, req.Description, req.Location, req.Department, claims.UserID)
+	expLevel := enums.ExperienceAny
+	if req.ExperienceLevel != "" && enums.ExperienceLevel(req.ExperienceLevel).Valid() {
+		expLevel = enums.ExperienceLevel(req.ExperienceLevel)
+	}
+	job, err := h.svc.Create(c.Request.Context(), CreateParams{
+		Title:           req.Title,
+		Description:     req.Description,
+		Location:        req.Location,
+		Department:      req.Department,
+		ExperienceLevel: expLevel,
+		Qualification:   req.Qualification,
+		Skills:          req.Skills,
+		VacancyLimits:   req.VacancyLimits,
+	}, claims.UserID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -133,6 +155,16 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 	job.Location = req.Location
 	job.Department = req.Department
+	if req.ExperienceLevel != "" && enums.ExperienceLevel(req.ExperienceLevel).Valid() {
+		job.ExperienceLevel = enums.ExperienceLevel(req.ExperienceLevel)
+	}
+	job.Qualification = req.Qualification
+	if req.Skills != nil {
+		job.Skills = req.Skills
+	}
+	if req.VacancyLimits != nil {
+		job.VacancyLimits = entities.VacancyLimits(req.VacancyLimits)
+	}
 	if err := h.svc.Update(c.Request.Context(), job); err != nil {
 		response.Error(c, err)
 		return

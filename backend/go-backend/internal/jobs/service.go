@@ -12,6 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateParams holds fields for creating a job.
+type CreateParams struct {
+	Title           string
+	Description     string
+	Location        string
+	Department      string
+	ExperienceLevel enums.ExperienceLevel
+	Qualification   string
+	Skills          []string
+	VacancyLimits   []entities.RoleVacancy
+}
+
 // Service contains job business logic; no HTTP.
 type Service struct {
 	repo *postgres.JobRepo
@@ -23,21 +35,29 @@ func NewService(repo *postgres.JobRepo) *Service {
 }
 
 // Create creates a job in DRAFT; createdBy must be HR user ID.
-func (s *Service) Create(ctx context.Context, title, description, location, department, createdBy string) (*entities.Job, error) {
-	if title == "" || description == "" {
+func (s *Service) Create(ctx context.Context, p CreateParams, createdBy string) (*entities.Job, error) {
+	if p.Title == "" || p.Description == "" {
 		return nil, &domainerrors.ValidationError{Field: "title/description", Message: "required"}
+	}
+	expLevel := p.ExperienceLevel
+	if !expLevel.Valid() {
+		expLevel = enums.ExperienceAny
 	}
 	now := time.Now()
 	j := &entities.Job{
-		ID:          uuid.New().String(),
-		Title:       title,
-		Description: description,
-		Location:    location,
-		Department:  department,
-		Status:      enums.JobDraft,
-		CreatedBy:   createdBy,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:              uuid.New().String(),
+		Title:           p.Title,
+		Description:     p.Description,
+		Location:        p.Location,
+		Department:      p.Department,
+		Status:          enums.JobDraft,
+		ExperienceLevel: expLevel,
+		Qualification:   p.Qualification,
+		Skills:          p.Skills,
+		VacancyLimits:   entities.VacancyLimits(p.VacancyLimits),
+		CreatedBy:       createdBy,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 	if err := s.repo.Create(ctx, j); err != nil {
 		return nil, err

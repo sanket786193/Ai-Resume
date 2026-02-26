@@ -11,15 +11,24 @@ import (
 	"github.com/google/uuid"
 )
 
+// InterviewNotifier sends candidate notification when interview is scheduled (Phase 3). Optional.
+type InterviewNotifier interface {
+	SendInterviewScheduled(ctx context.Context, candidateEmail, jobTitle string)
+}
+
 // Service contains interview scheduling logic.
 type Service struct {
-	repo   *postgres.InterviewRepo
-	atsRepo *postgres.ATSRepo
+	repo         *postgres.InterviewRepo
+	atsRepo      *postgres.ATSRepo
+	candidateRepo *postgres.CandidateRepo
+	userRepo     *postgres.UserRepo
+	jobRepo      *postgres.JobRepo
+	notifier     InterviewNotifier
 }
 
 // NewService creates an interviews service.
-func NewService(repo *postgres.InterviewRepo, atsRepo *postgres.ATSRepo) *Service {
-	return &Service{repo: repo, atsRepo: atsRepo}
+func NewService(repo *postgres.InterviewRepo, atsRepo *postgres.ATSRepo, candidateRepo *postgres.CandidateRepo, userRepo *postgres.UserRepo, jobRepo *postgres.JobRepo, notifier InterviewNotifier) *Service {
+	return &Service{repo: repo, atsRepo: atsRepo, candidateRepo: candidateRepo, userRepo: userRepo, jobRepo: jobRepo, notifier: notifier}
 }
 
 // Schedule creates an interview tied to an ATS record.
@@ -50,6 +59,23 @@ func (s *Service) Schedule(ctx context.Context, atsID string, scheduledAt time.T
 	if err := s.repo.Create(ctx, i); err != nil {
 		return nil, err
 	}
+	if s.notifier != nil && s.candidateRepo != nil && s.userRepo != nil && s.jobRepo != nil {
+		rec, _ := s.atsRepo.GetByID(ctx, atsID)
+		if rec != nil {
+			candidate, _ := s.candidateRepo.GetByID(ctx, rec.CandidateID)
+			if candidate != nil {
+				user, _ := s.userRepo.GetByID(ctx, candidate.UserID)
+				job, _ := s.jobRepo.GetByID(ctx, rec.JobID)
+				jobTitle := ""
+				if job != nil {
+					jobTitle = job.Title
+				}
+				if user != nil && user.Email != "" {
+					s.notifier.SendInterviewScheduled(ctx, user.Email, jobTitle)
+				}
+			}
+		}
+	}
 	return i, nil
 }
 
@@ -75,4 +101,20 @@ func (s *Service) Update(ctx context.Context, i *entities.Interview) error {
 	}
 	i.UpdatedAt = time.Now()
 	return s.repo.Update(ctx, i)
+}
+
+// ConfirmForCandidate records that the candidate confirmed (or declined) the interview (Phase 3). Candidate must own the ATS record.
+func (s *Service) ConfirmForCandidate(ctx context.Context, candidateID, interviewID string) error {
+	interview, err := s.repo.GetByID(ctx, interviewID)
+	if err != nil || interview == nil {
+		return &domainerrors.NotFoundError{Resource: "interview", ID: interviewID}
+	}
+	rec, err := s.atsRepo.GetByID(ctx, interview.ATSID)
+	if err != nil || rec == nil {
+		return &domainerrors.NotFoundError{Resource: "application", ID: interview.ATSID}
+	}
+	if rec.CandidateID != candidateID {
+		return &domainerrors.ForbiddenError{Message: "interview does not belong to you"}
+	}
+	return s.repo.SetCandidateConfirmedAt(ctx, interviewID, time.Now())
 }

@@ -10,10 +10,21 @@ export function useOffersList(params) {
   })
 }
 
+export function useCreateOffer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: offersApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OFFERS_QUERY_KEY })
+      queryClient.invalidateQueries({ queryKey: ['ats', 'pipeline'] })
+    },
+  })
+}
+
 export function useSendSelection() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: offersApi.sendSelection,
+    mutationFn: offersApi.accept,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OFFERS_QUERY_KEY })
       queryClient.invalidateQueries({ queryKey: ['ats', 'pipeline'] })
@@ -24,7 +35,7 @@ export function useSendSelection() {
 export function useSendRejection() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: offersApi.sendRejection,
+    mutationFn: offersApi.reject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OFFERS_QUERY_KEY })
       queryClient.invalidateQueries({ queryKey: ['ats', 'pipeline'] })

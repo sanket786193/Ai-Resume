@@ -17,18 +17,19 @@ import (
 	"resume/internal/candidates"
 	"resume/internal/interviews"
 	"resume/internal/jobs"
+	"resume/internal/notifications"
 	"resume/internal/offers"
 	"resume/internal/server"
+	"resume/internal/cloudinary"
 	"resume/internal/storage/postgres"
 	"resume/internal/storage/tx"
-	"resume/internal/supabase"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	_ = godotenv.Load() // load .env from cwd so os.Getenv sees SUPABASE_*, DB_*, etc.
+	_ = godotenv.Load() // load .env from cwd so os.Getenv sees CLOUDINARY_*, DB_*, etc.
 	cfg := config.LoadConfig()
 
 	var db *postgres.DB
@@ -82,13 +83,14 @@ func main() {
 	candidateSvc := candidates.NewService(candidateRepo, resumeRepo, atsRepo, jobRepo)
 	var resumeUploader candidates.ResumeUploader
 	var atsResumeURLResolver ats.ResumeURLResolver
-	if cfg.SupabaseStorage.Enabled && cfg.SupabaseStorage.URL != "" && cfg.SupabaseStorage.ServiceRoleKey != "" && cfg.SupabaseStorage.Bucket != "" {
-		sb := supabase.NewClient(supabase.Config{
-			URL:            cfg.SupabaseStorage.URL,
-			ServiceRoleKey: cfg.SupabaseStorage.ServiceRoleKey,
-			Bucket:         cfg.SupabaseStorage.Bucket,
+	if cfg.CloudinaryStorage.Enabled && cfg.CloudinaryStorage.CloudName != "" && cfg.CloudinaryStorage.APIKey != "" && cfg.CloudinaryStorage.APISecret != "" {
+		cl := cloudinary.NewClient(cloudinary.Config{
+			CloudName:     cfg.CloudinaryStorage.CloudName,
+			APIKey:        cfg.CloudinaryStorage.APIKey,
+			APISecret:     cfg.CloudinaryStorage.APISecret,
+			UploadFolder:  cfg.CloudinaryStorage.Folder,
 		})
-		resumeUploader = &supabaseResumeUploader{client: sb}
+		resumeUploader = &cloudinaryResumeUploader{client: cl}
 		atsResumeURLResolver = func(storagePath string) string {
 			if storagePath == "" {
 				return ""
@@ -96,18 +98,20 @@ func main() {
 			if strings.HasPrefix(storagePath, "http://") || strings.HasPrefix(storagePath, "https://") {
 				return storagePath
 			}
-			return sb.PublicURL(storagePath)
+			return cl.PublicURL(storagePath)
 		}
 	}
 	candidateHandler := candidates.NewHandler(candidateSvc, resumeUploader)
 
+	notifSvc := notifications.NewServiceWithSMTP(&cfg.SMTP)
 	atsSvc := ats.NewServiceWithResolver(atsRepo, jobRepo, resumeRepo, parsedRepo, candidateRepo, userRepo, atsAIClient, cfg.AI.Enabled, atsResumeURLResolver)
+	atsSvc.SetNotifier(notifSvc)
 	atsHandler := ats.NewHandler(atsSvc)
 
-	interviewSvc := interviews.NewService(interviewRepo, atsRepo)
+	interviewSvc := interviews.NewService(interviewRepo, atsRepo, candidateRepo, userRepo, jobRepo, notifSvc)
 	interviewHandler := interviews.NewHandler(interviewSvc)
 
-	offerSvc := offers.NewService(offerRepo, atsRepo, txRunner)
+	offerSvc := offers.NewService(offerRepo, atsRepo, txRunner, candidateRepo, userRepo, jobRepo, notifSvc)
 	offerHandler := offers.NewHandler(offerSvc)
 
 	// Server
@@ -150,17 +154,17 @@ func main() {
 	log.Println("server stopped")
 }
 
-// supabaseResumeUploader adapts supabase.Client to candidates.ResumeUploader.
-type supabaseResumeUploader struct {
-	client *supabase.Client
+// cloudinaryResumeUploader adapts cloudinary.Client to candidates.ResumeUploader.
+type cloudinaryResumeUploader struct {
+	client *cloudinary.Client
 }
 
-func (u *supabaseResumeUploader) Upload(ctx context.Context, fileContent []byte, fileName string) (string, error) {
+func (u *cloudinaryResumeUploader) Upload(ctx context.Context, fileContent []byte, fileName string) (string, error) {
 	res, err := u.client.Upload(ctx, fileContent, fileName)
 	if err != nil {
 		return "", err
 	}
-	return u.client.PublicURL(res.Key), nil
+	return res.SecureURL, nil
 }
 
 // setupRouter builds the Gin router (extracted for testing).

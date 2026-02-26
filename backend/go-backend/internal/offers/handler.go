@@ -74,10 +74,22 @@ func (h *Handler) List(c *gin.Context) {
 	response.JSON(c, http.StatusOK, []interface{}{})
 }
 
-// GetByID returns an offer by ID.
+// GetByID returns an offer by ID (HR).
 func (h *Handler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	offer, err := h.svc.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.JSON(c, http.StatusOK, offer)
+}
+
+// GetByIDForCandidate returns the offer by ID for the candidate (Phase 3: view offer / download letter).
+func (h *Handler) GetByIDForCandidate(c *gin.Context) {
+	candidateID := c.Param("candidate_id")
+	offerID := c.Param("id")
+	offer, err := h.svc.GetByIDForCandidate(c.Request.Context(), offerID, candidateID)
 	if err != nil {
 		response.Error(c, err)
 		return

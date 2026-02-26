@@ -14,16 +14,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// OfferNotifier sends candidate notification when offer is ready (Phase 3). Optional.
+type OfferNotifier interface {
+	SendOfferLetterReady(ctx context.Context, candidateEmail, jobTitle string)
+}
+
 // Service contains offer creation and accept/reject logic; ATS → HIRED only after accept.
 type Service struct {
-	offerRepo *postgres.OfferRepo
-	atsRepo   *postgres.ATSRepo
-	txRunner  *tx.Runner
+	offerRepo      *postgres.OfferRepo
+	atsRepo        *postgres.ATSRepo
+	txRunner       *tx.Runner
+	candidateRepo  *postgres.CandidateRepo
+	userRepo       *postgres.UserRepo
+	jobRepo        *postgres.JobRepo
+	notifier       OfferNotifier
 }
 
 // NewService creates an offers service.
-func NewService(offerRepo *postgres.OfferRepo, atsRepo *postgres.ATSRepo, txRunner *tx.Runner) *Service {
-	return &Service{offerRepo: offerRepo, atsRepo: atsRepo, txRunner: txRunner}
+func NewService(offerRepo *postgres.OfferRepo, atsRepo *postgres.ATSRepo, txRunner *tx.Runner, candidateRepo *postgres.CandidateRepo, userRepo *postgres.UserRepo, jobRepo *postgres.JobRepo, notifier OfferNotifier) *Service {
+	return &Service{offerRepo: offerRepo, atsRepo: atsRepo, txRunner: txRunner, candidateRepo: candidateRepo, userRepo: userRepo, jobRepo: jobRepo, notifier: notifier}
 }
 
 // Initiate creates an offer for an ATS record (HR).
@@ -55,6 +64,20 @@ func (s *Service) Initiate(ctx context.Context, atsID, amount, currency string, 
 	}
 	if err := s.offerRepo.Create(ctx, offer); err != nil {
 		return nil, err
+	}
+	if s.notifier != nil && s.candidateRepo != nil && s.userRepo != nil && s.jobRepo != nil {
+		candidate, _ := s.candidateRepo.GetByID(ctx, rec.CandidateID)
+		if candidate != nil {
+			user, _ := s.userRepo.GetByID(ctx, candidate.UserID)
+			job, _ := s.jobRepo.GetByID(ctx, rec.JobID)
+			jobTitle := ""
+			if job != nil {
+				jobTitle = job.Title
+			}
+			if user != nil && user.Email != "" {
+				s.notifier.SendOfferLetterReady(ctx, user.Email, jobTitle)
+			}
+		}
 	}
 	return offer, nil
 }
@@ -102,4 +125,20 @@ func (s *Service) GetByID(ctx context.Context, id string) (*entities.Offer, erro
 // GetByATSID returns the offer for an ATS record.
 func (s *Service) GetByATSID(ctx context.Context, atsID string) (*entities.Offer, error) {
 	return s.offerRepo.GetByATSID(ctx, atsID)
+}
+
+// GetByIDForCandidate returns the offer by ID if it belongs to the candidate (Phase 3: view/download offer letter).
+func (s *Service) GetByIDForCandidate(ctx context.Context, offerID, candidateID string) (*entities.Offer, error) {
+	offer, err := s.offerRepo.GetByID(ctx, offerID)
+	if err != nil || offer == nil {
+		return nil, &domainerrors.NotFoundError{Resource: "offer", ID: offerID}
+	}
+	rec, err := s.atsRepo.GetByID(ctx, offer.ATSID)
+	if err != nil || rec == nil {
+		return nil, &domainerrors.NotFoundError{Resource: "application", ID: offer.ATSID}
+	}
+	if rec.CandidateID != candidateID {
+		return nil, &domainerrors.ForbiddenError{Message: "offer does not belong to you"}
+	}
+	return offer, nil
 }

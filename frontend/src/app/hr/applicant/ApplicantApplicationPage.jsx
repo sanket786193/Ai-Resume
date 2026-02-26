@@ -1,7 +1,18 @@
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -11,6 +22,8 @@ import {
 } from '@/components/ui/select'
 import { useUpdateCandidateStatus } from '@/modules/ats/hooks/useAtsPipeline'
 import { APPLICATION_DETAIL_QUERY_KEY } from '@/modules/ats/hooks/useApplicationDetail'
+import { useCreateInterview } from '@/modules/interviews/hooks/useInterviews'
+import { useCreateOffer } from '@/modules/offers/hooks/useOffers'
 import { ATS_STATUS_LABEL } from '@/constants'
 import { JOB_APPLICANTS_QUERY_KEY } from '@/modules/jobs/hooks/useJobs'
 
@@ -33,7 +46,20 @@ export function ApplicantApplicationPage() {
   const { detail, jobId } = useOutletContext()
   const queryClient = useQueryClient()
   const updateStatus = useUpdateCandidateStatus()
+  const createInterview = useCreateInterview()
+  const createOffer = useCreateOffer()
   const applicationId = detail?.id ?? detail?.ID
+  const atsId = applicationId
+
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')
+  const [duration, setDuration] = useState(60)
+  const [location, setLocation] = useState('')
+  const [notes, setNotes] = useState('')
+  const [offerOpen, setOfferOpen] = useState(false)
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('INR')
+  const [startsAt, setStartsAt] = useState('')
 
   const handleStatusChange = (newStatus) => {
     if (!applicationId || !newStatus) return
@@ -48,6 +74,68 @@ export function ApplicantApplicationPage() {
     )
   }
 
+  const invalidateDetail = () => {
+    queryClient.invalidateQueries({ queryKey: APPLICATION_DETAIL_QUERY_KEY(applicationId) })
+    if (jobId) queryClient.invalidateQueries({ queryKey: JOB_APPLICANTS_QUERY_KEY(jobId) })
+  }
+
+  const handleScheduleInterview = () => {
+    if (!atsId || !scheduleAt) {
+      toast.error('Select date and time')
+      return
+    }
+    const d = new Date(scheduleAt)
+    if (isNaN(d.getTime())) {
+      toast.error('Invalid date/time')
+      return
+    }
+    createInterview.mutate(
+      {
+        ats_id: atsId,
+        scheduled_at: d.toISOString(),
+        duration_minutes: duration || 60,
+        location: location.trim() || undefined,
+        round: 1,
+        notes: notes.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Interview scheduled')
+          setScheduleOpen(false)
+          setScheduleAt('')
+          setDuration(60)
+          setLocation('')
+          setNotes('')
+          invalidateDetail()
+        },
+        onError: () => toast.error('Failed to schedule interview'),
+      }
+    )
+  }
+
+  const handleIssueOffer = () => {
+    if (!atsId) return
+    createOffer.mutate(
+      {
+        ats_id: atsId,
+        amount: amount.trim() || undefined,
+        currency: currency.trim() || 'INR',
+        starts_at: startsAt.trim() ? new Date(startsAt).toISOString() : undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Offer created')
+          setOfferOpen(false)
+          setAmount('')
+          setCurrency('INR')
+          setStartsAt('')
+          invalidateDetail()
+        },
+        onError: () => toast.error('Failed to create offer'),
+      }
+    )
+  }
+
   if (!detail) return null
 
   const appliedAt = detail.created_at
@@ -55,6 +143,7 @@ export function ApplicantApplicationPage() {
     : null
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-2">
         <h2 className="text-base font-semibold">Application</h2>
@@ -86,7 +175,87 @@ export function ApplicantApplicationPage() {
           <DetailRow label="Applied" value={appliedAt} />
           <DetailRow label="Job" value={detail.job_title} />
         </div>
+        <div className="flex flex-wrap gap-2 pt-4 border-t border-border/50">
+          <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)}>
+            Schedule interview
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setOfferOpen(true)}>
+            Issue offer
+          </Button>
+        </div>
       </CardContent>
     </Card>
+
+    <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Schedule interview</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="scheduled_at">Date & time</Label>
+            <Input
+              id="scheduled_at"
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={(e) => setScheduleAt(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="duration">Duration (minutes)</Label>
+            <Input
+              id="duration"
+              type="number"
+              min={15}
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value) || 60)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="location">Location / meeting link</Label>
+            <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Zoom link" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+          <Button onClick={handleScheduleInterview} disabled={createInterview.isPending}>
+            {createInterview.isPending ? 'Scheduling…' : 'Schedule'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={offerOpen} onOpenChange={setOfferOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Issue offer</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="amount">Amount</Label>
+            <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 15 LPA" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="currency">Currency</Label>
+            <Input id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="INR" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="starts_at">Start date (optional)</Label>
+            <Input id="starts_at" type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOfferOpen(false)}>Cancel</Button>
+          <Button onClick={handleIssueOffer} disabled={createOffer.isPending}>
+            {createOffer.isPending ? 'Creating…' : 'Create offer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>
   )
 }

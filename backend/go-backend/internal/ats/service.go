@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"resume/internal/ai/client"
 	"resume/internal/domain/entities"
 	domainerrors "resume/internal/domain/errors"
 	"resume/internal/domain/enums"
@@ -16,7 +17,7 @@ import (
 
 // AIClient interface for resume screening and parsing (advisory only).
 type AIClient interface {
-	ScreenResume(ctx context.Context, resumeContentOrPath string, jobDescription string) (*AIScreenResult, error)
+	ScreenResume(ctx context.Context, resumeContentOrPath, jobDescription string, jobRequirements *client.JobRequirements) (*AIScreenResult, error)
 	Parse(ctx context.Context, resumePathOrContent string) (rawText string, parsedJSON []byte, cleanedText string, err error)
 }
 
@@ -52,12 +53,13 @@ type ApplicationForHR struct {
 	JobTitle        string    `json:"job_title"`
 }
 
-// ApplicationDetailForHR is a single application with full candidate and AI feedback for HR detail view.
+// ApplicationDetailForHR is a single application with full candidate and AI details for HR detail view.
 type ApplicationDetailForHR struct {
 	ApplicationForHR
 	CandidatePhone     string    `json:"candidate_phone,omitempty"`
 	CandidateLinkedIn  string    `json:"candidate_linkedin,omitempty"`
 	ResumeFileName     string    `json:"resume_file_name,omitempty"`
+	ResumeURL          string    `json:"resume_url,omitempty"` // public URL for PDF viewer
 	AIProcessedAt     *time.Time `json:"ai_processed_at,omitempty"`
 	SkillMatchPct     *int       `json:"skill_match_pct,omitempty"`
 	AISummary         string     `json:"ai_summary,omitempty"`
@@ -73,6 +75,12 @@ type ApplicationDetailForHR struct {
 // If nil, the raw path is passed through (must be a full URL for screening to work).
 type ResumeURLResolver func(storagePath string) string
 
+// ATSNotifier sends candidate notifications on status change (Phase 3). Optional; if nil, no emails sent.
+type ATSNotifier interface {
+	SendShortlisted(ctx context.Context, candidateEmail, jobTitle string)
+	SendRejected(ctx context.Context, candidateEmail, jobTitle string)
+}
+
 // Service contains ATS application and status flow logic.
 type Service struct {
 	atsRepo           *postgres.ATSRepo
@@ -84,6 +92,7 @@ type Service struct {
 	ai                AIClient
 	aiEnabled         bool
 	resumeURLResolver ResumeURLResolver
+	notifier          ATSNotifier
 }
 
 // NewService creates an ATS service.
@@ -126,6 +135,11 @@ func NewServiceWithResolver(
 	return s
 }
 
+// SetNotifier sets the optional notifier for shortlist/rejection emails (Phase 3).
+func (s *Service) SetNotifier(n ATSNotifier) {
+	s.notifier = n
+}
+
 // Apply creates an ATS record for candidate+job+resume; triggers AI screening async (non-blocking).
 func (s *Service) Apply(ctx context.Context, jobID, candidateID, resumeID string) (*entities.ATSRecord, error) {
 	job, err := s.jobRepo.GetByID(ctx, jobID)
@@ -165,13 +179,58 @@ func (s *Service) Apply(ctx context.Context, jobID, candidateID, resumeID string
 	}
 	// Trigger AI screening in background: parse resume (store in resume_parsed_data), then screen.
 	if s.aiEnabled && s.ai != nil {
-		go s.runAIScreening(context.Background(), rec.ID, resume.ID, resume.StoragePath, job.Description)
+		go s.runAIScreening(context.Background(), rec.ID, resume.ID, resume.StoragePath, job)
 	}
 	return rec, nil
 }
 
+// BulkApplyItem is one (candidate_id, resume_id) for bulk apply (Phase 4).
+type BulkApplyItem struct {
+	CandidateID string `json:"candidate_id"`
+	ResumeID    string `json:"resume_id"`
+}
+
+// BulkApplyResult is the result of bulk apply (Phase 4).
+type BulkApplyResult struct {
+	Created int      `json:"created"`
+	Skipped int      `json:"skipped"` // already applied
+	Errors  []string `json:"errors,omitempty"`
+}
+
+// BulkApply creates ATS records for multiple candidate+resume pairs for a job (HR). hrUserID must own the job. Skips already-applied; triggers AI for each new record (Phase 4).
+func (s *Service) BulkApply(ctx context.Context, jobID, hrUserID string, items []BulkApplyItem) (*BulkApplyResult, error) {
+	job, err := s.jobRepo.GetByID(ctx, jobID)
+	if err != nil || job == nil {
+		return nil, &domainerrors.NotFoundError{Resource: "job", ID: jobID}
+	}
+	if job.CreatedBy != hrUserID {
+		return nil, &domainerrors.ForbiddenError{Message: "job not owned by you"}
+	}
+	if job.Status != enums.JobPublished {
+		return nil, &domainerrors.ValidationError{Field: "job", Message: "job is not published"}
+	}
+	result := &BulkApplyResult{}
+	for _, item := range items {
+		if item.CandidateID == "" || item.ResumeID == "" {
+			result.Errors = append(result.Errors, "missing candidate_id or resume_id")
+			continue
+		}
+		_, err := s.Apply(ctx, jobID, item.CandidateID, item.ResumeID)
+		if err != nil {
+			if _, ok := err.(*domainerrors.ConflictError); ok {
+				result.Skipped++
+			} else {
+				result.Errors = append(result.Errors, err.Error())
+			}
+			continue
+		}
+		result.Created++
+	}
+	return result, nil
+}
+
 // runAIScreening calls Parse (persists to resume_parsed_data), then AI screen; errors are logged, not returned.
-func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePath, jobDescription string) {
+func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePath string, job *entities.Job) {
 	resumeInput := resumePath
 	if s.resumeURLResolver != nil && resumePath != "" && !strings.HasPrefix(strings.TrimSpace(resumePath), "http://") && !strings.HasPrefix(strings.TrimSpace(resumePath), "https://") {
 		if u := s.resumeURLResolver(resumePath); u != "" {
@@ -179,7 +238,7 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 		}
 	}
 
-	// 1) Parse resume and store in resume_parsed_data
+	// 1) Parse resume and store in resume_parsed_data; mark resume as PROCESSED when done (Phase 3).
 	if s.parsedRepo != nil {
 		rawText, parsedJSON, cleanedText, err := s.ai.Parse(ctx, resumeInput)
 		if err != nil {
@@ -187,12 +246,24 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 		} else if rawText != "" || len(parsedJSON) > 0 || cleanedText != "" {
 			if err := s.parsedRepo.Upsert(ctx, resumeID, rawText, parsedJSON, cleanedText); err != nil {
 				log.Printf("[ATS] failed to persist parsed resume resumeID=%s: %v", resumeID, err)
+			} else {
+				_ = s.resumeRepo.UpdateStatus(ctx, resumeID, enums.ResumeProcessed)
 			}
 		}
 	}
 
-	// 2) Screen resume against job (AI service fetches PDF from URL if needed)
-	result, err := s.ai.ScreenResume(ctx, resumeInput, jobDescription)
+	// 2) Build optional job requirements for matching (Phase 2)
+	var req *client.JobRequirements
+	if len(job.Skills) > 0 || job.Qualification != "" || (job.ExperienceLevel != "" && job.ExperienceLevel != enums.ExperienceAny) {
+		req = &client.JobRequirements{
+			Skills:          job.Skills,
+			ExperienceLevel: string(job.ExperienceLevel),
+			Qualification:   job.Qualification,
+		}
+	}
+
+	// 3) Screen resume against job (AI service uses requirements when provided)
+	result, err := s.ai.ScreenResume(ctx, resumeInput, job.Description, req)
 	if err != nil {
 		log.Printf("[ATS] AI screen failed for atsID=%s: %v", atsID, err)
 		return
@@ -224,7 +295,20 @@ func (s *Service) runAIScreening(ctx context.Context, atsID, resumeID, resumePat
 	if hasFeedback {
 		_ = s.atsRepo.UpdateAIFeedback(ctx, atsID, atsScore, skillMatchPct, result.MissingSkills, result.ExperienceMatch, result.Summary, result.ModelVersion, result.ExperienceWarnings, result.KeywordMatches, result.SemanticMatches, now)
 	}
-	_ = s.atsRepo.UpdateStatus(ctx, atsID, enums.ATSScreening)
+
+	// 4) Auto-shortlist when qualified and under vacancy limit (Phase 2); otherwise set to SCREENING
+	nextStatus := enums.ATSScreening
+	if result.Qualified && len(job.VacancyLimits) > 0 {
+		totalSlots := 0
+		for _, v := range job.VacancyLimits {
+			totalSlots += v.Limit
+		}
+		shortlistedCount, _ := s.atsRepo.CountByJobIDAndStatus(ctx, job.ID, enums.ATSShortlisted)
+		if shortlistedCount < totalSlots {
+			nextStatus = enums.ATSShortlisted
+		}
+	}
+	_ = s.atsRepo.UpdateStatus(ctx, atsID, nextStatus)
 }
 
 // GetApplicationStatus returns ATS record for candidate+job (candidate view).
@@ -234,6 +318,37 @@ func (s *Service) GetApplicationStatus(ctx context.Context, jobID, candidateID s
 		return nil, &domainerrors.NotFoundError{Resource: "application", ID: jobID + "/" + candidateID}
 	}
 	return rec, nil
+}
+
+// ApplicationFeedbackForCandidate is the safe subset of AI feedback shown to candidates (Phase 3).
+type ApplicationFeedbackForCandidate struct {
+	SkillMatchPct   *int     `json:"skill_match_pct,omitempty"`
+	Summary         string   `json:"summary,omitempty"`
+	ImprovementTips []string `json:"improvement_tips,omitempty"` // from missing_skills as suggestions
+}
+
+// GetApplicationFeedbackForCandidate returns AI feedback for the candidate's own application (safe subset only).
+func (s *Service) GetApplicationFeedbackForCandidate(ctx context.Context, jobID, candidateID string) (*ApplicationFeedbackForCandidate, error) {
+	rec, err := s.atsRepo.GetByJobAndCandidate(ctx, jobID, candidateID)
+	if err != nil || rec == nil {
+		return nil, &domainerrors.NotFoundError{Resource: "application", ID: jobID + "/" + candidateID}
+	}
+	out := &ApplicationFeedbackForCandidate{}
+	if rec.SkillMatchPct != nil {
+		out.SkillMatchPct = rec.SkillMatchPct
+	}
+	if rec.AISummary != nil && *rec.AISummary != "" {
+		out.Summary = *rec.AISummary
+	}
+	if len(rec.MissingSkills) > 0 {
+		out.ImprovementTips = make([]string, 0, len(rec.MissingSkills))
+		for _, skill := range rec.MissingSkills {
+			if skill != "" {
+				out.ImprovementTips = append(out.ImprovementTips, "Consider highlighting: "+skill)
+			}
+		}
+	}
+	return out, nil
 }
 
 // ListByCandidate returns ATS records for a candidate.
@@ -354,7 +469,7 @@ func (s *Service) enrichApplications(ctx context.Context, list []*entities.ATSRe
 	return out, nil
 }
 
-// UpdateStatus updates ATS status (HR); validate transitions in service.
+// UpdateStatus updates ATS status (HR); validate transitions in service. Sends notification when shortlisted/rejected (Phase 3).
 func (s *Service) UpdateStatus(ctx context.Context, atsID string, status enums.ATSStatus) error {
 	if !status.Valid() {
 		return &domainerrors.ValidationError{Field: "status", Message: "invalid ATS status"}
@@ -363,7 +478,28 @@ func (s *Service) UpdateStatus(ctx context.Context, atsID string, status enums.A
 	if err != nil || rec == nil {
 		return &domainerrors.NotFoundError{Resource: "ats_record", ID: atsID}
 	}
-	return s.atsRepo.UpdateStatus(ctx, atsID, status)
+	if err := s.atsRepo.UpdateStatus(ctx, atsID, status); err != nil {
+		return err
+	}
+	if s.notifier != nil && (status == enums.ATSShortlisted || status == enums.ATSRejected) {
+		candidate, _ := s.candidateRepo.GetByID(ctx, rec.CandidateID)
+		if candidate != nil {
+			user, _ := s.userRepo.GetByID(ctx, candidate.UserID)
+			job, _ := s.jobRepo.GetByID(ctx, rec.JobID)
+			jobTitle := ""
+			if job != nil {
+				jobTitle = job.Title
+			}
+			if user != nil && user.Email != "" {
+				if status == enums.ATSShortlisted {
+					s.notifier.SendShortlisted(ctx, user.Email, jobTitle)
+				} else {
+					s.notifier.SendRejected(ctx, user.Email, jobTitle)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // GetByID returns an ATS record by ID.
@@ -395,6 +531,9 @@ func (s *Service) GetApplicationByIDEnriched(ctx context.Context, id string) (*A
 		resume, _ := s.resumeRepo.GetByID(ctx, rec.ResumeID)
 		if resume != nil {
 			detail.ResumeFileName = resume.FileName
+			if s.resumeURLResolver != nil {
+				detail.ResumeURL = s.resumeURLResolver(resume.StoragePath)
+			}
 		}
 	}
 	detail.AIProcessedAt = rec.AIProcessedAt
@@ -419,4 +558,20 @@ func (s *Service) GetApplicationByIDEnriched(ctx context.Context, id string) (*A
 	}
 	detail.Qualified = rec.Qualified
 	return detail, nil
+}
+
+// GetApplicationResumeURL returns the public URL for an application's resume PDF (for proxy/viewer). Returns empty string if no resume or no resolver.
+func (s *Service) GetApplicationResumeURL(ctx context.Context, applicationID string) (string, error) {
+	rec, err := s.atsRepo.GetByID(ctx, applicationID)
+	if err != nil || rec == nil {
+		return "", &domainerrors.NotFoundError{Resource: "application", ID: applicationID}
+	}
+	if rec.ResumeID == "" || s.resumeURLResolver == nil {
+		return "", nil
+	}
+	resume, err := s.resumeRepo.GetByID(ctx, rec.ResumeID)
+	if err != nil || resume == nil {
+		return "", nil
+	}
+	return s.resumeURLResolver(resume.StoragePath), nil
 }

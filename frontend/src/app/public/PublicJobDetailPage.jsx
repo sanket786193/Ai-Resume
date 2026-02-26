@@ -37,8 +37,13 @@ export function PublicJobDetailPage() {
   const department = job.department ?? job.Department
   const description = job.description ?? job.Description ?? ''
   const status = job.status ?? job.Status
+  const experienceLevel = job.experience_level ?? job.experienceLevel
+  const qualification = job.qualification ?? job.Qualification
+  const skills = job.skills ?? job.Skills ?? []
+  const vacancyLimits = job.vacancy_limits ?? job.vacancyLimits ?? job.VacancyLimits ?? []
   const isClosed = status === 'CLOSED'
   const hasLongDescription = description.length > 400
+  const experienceLabel = { ANY: 'Any', FRESHER: 'Fresher', EXPERIENCED: 'Experienced' }[experienceLevel] ?? experienceLevel
 
   return (
     <div>
@@ -47,10 +52,23 @@ export function PublicJobDetailPage() {
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
             {department && <p className="text-muted-foreground">{department}</p>}
+            {(experienceLevel && experienceLevel !== 'ANY') && <p className="text-sm text-muted-foreground">{experienceLabel}</p>}
           </div>
           {isClosed && <Badge variant="secondary">Closed</Badge>}
         </CardHeader>
         <CardContent className="space-y-4">
+          {(qualification || (Array.isArray(skills) && skills.length > 0) || (Array.isArray(vacancyLimits) && vacancyLimits.length > 0)) && (
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <h3 className="text-sm font-medium">Requirements</h3>
+              {qualification && <p className="text-sm"><span className="text-muted-foreground">Qualification:</span> {qualification}</p>}
+              {Array.isArray(skills) && skills.length > 0 && (
+                <p className="text-sm"><span className="text-muted-foreground">Skills:</span> {skills.join(', ')}</p>
+              )}
+              {Array.isArray(vacancyLimits) && vacancyLimits.length > 0 && (
+                <p className="text-sm"><span className="text-muted-foreground">Vacancies:</span> {vacancyLimits.map((v) => `${v.role ?? v.Role ?? ''} (${v.limit ?? v.Limit ?? 0})`).filter(Boolean).join(', ')}</p>
+              )}
+            </div>
+          )}
           <div>
             <SafeMarkdown content={description} />
           </div>

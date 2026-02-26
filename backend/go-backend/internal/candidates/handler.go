@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ResumeUploader uploads file content and returns a storage URL (e.g. Supabase Storage).
+// ResumeUploader uploads file content and returns a storage URL (e.g. Cloudinary).
 type ResumeUploader interface {
 	Upload(ctx context.Context, fileContent []byte, fileName string) (storageURL string, err error)
 }
@@ -84,7 +84,7 @@ func (h *Handler) UploadResume(c *gin.Context) {
 
 const maxResumeSize = 100 << 20 // 100 MB
 
-// UploadResumePDF accepts a multipart form file (PDF only), uploads to Supabase Storage, and creates resume record.
+// UploadResumePDF accepts a multipart form file (PDF only), uploads to Cloudinary, and creates resume record.
 func (h *Handler) UploadResumePDF(c *gin.Context) {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -97,7 +97,7 @@ func (h *Handler) UploadResumePDF(c *gin.Context) {
 		return
 	}
 	if h.uploader == nil {
-		response.Error(c, &domainerrors.ValidationError{Field: "upload", Message: "resume upload not configured (Supabase Storage)"})
+		response.Error(c, &domainerrors.ValidationError{Field: "upload", Message: "resume upload not configured (Cloudinary)"})
 		return
 	}
 
